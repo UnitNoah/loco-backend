@@ -11,9 +11,9 @@ spring:
     hikari:
       maximum-pool-size: 5
       minimum-idle: 1
-      idle-timeout: 10000        # ?? ??? ?? ?? ??: 10?
-      max-lifetime: 15000        # ?? ??? ?? ??: 15? (10~20? ??? ??)
-      connection-timeout: 3000   # ??? ?? ?? ?? ??
+      idle-timeout: 10000        # 커넥션이 유휴 상태로 유지되는 시간: 10초
+      max-lifetime: 15000        # 커넥션의 최대 생존 시간: 15초
+      connection-timeout: 3000   # 커넥션 획득 시 최대 대기 시간: 3초
   jpa:
     hibernate:
       ddl-auto: update
