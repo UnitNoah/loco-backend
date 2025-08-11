@@ -65,6 +65,9 @@ public enum ErrorCode {
   MISSING_REQUIRED_FIELD(HttpStatus.BAD_REQUEST, 4000, "필수 입력 항목이 누락되었습니다."),
   INVALID_PARAMETER_TYPE(HttpStatus.BAD_REQUEST, 4000, "요청 파라미터 형식이 올바르지 않습니다."),
 
+  // 공지사항(Notice)
+  NOTICE_NOT_FOUND(HttpStatus.NOT_FOUND, 4004, "공지를 찾을 수 없습니다."),
+
   // 서버 오류
   INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 5000, "서버 내부 오류입니다."),
   DATABASE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 5000, "데이터베이스 오류가 발생했습니다."),
