@@ -3,7 +3,7 @@ spring:
     import: application-secret.yml
 
   datasource:
-    url: jdbc:postgresql://${secret.db.host}:${secret.db.port}/${secret.db.name}
+    url: jdbc:postgresql://${secret.db.host}:${secret.db.port}/${secret.db.name}?prepareThreshold=0
     username: ${secret.db.username}
     password: ${secret.db.password}
     driver-class-name: org.postgresql.Driver
