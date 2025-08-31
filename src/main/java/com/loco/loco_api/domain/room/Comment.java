@@ -2,11 +2,8 @@ package com.loco.loco_api.domain.room;
 
 import com.loco.loco_api.common.entity.UserAuditableEntity;
 import com.loco.loco_api.domain.place.Place;
-import com.loco.loco_api.domain.user.User;
 import jakarta.persistence.*;
 import lombok.*;
-
-import java.time.LocalDateTime;
 
 /**
  * 장소 댓글 엔티티 (방)

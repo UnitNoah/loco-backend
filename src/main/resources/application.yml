@@ -28,6 +28,11 @@ spring:
 
   security:
     oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: https://auth.loco.com/.well-known/jwks.json
+          # 또는 issuer-uri 사용(권장, OIDC 호환 시):
+          # issuer-uri: https://auth.loco.com
       client:
         registration:
           # ========== Google ==========

@@ -1,7 +1,7 @@
 package com.loco.loco_api.domain.room;
 
 import com.loco.loco_api.common.entity.BaseEntity;
-import com.loco.loco_api.domain.user.User;
+import com.loco.loco_api.domain.user.UserEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -27,6 +27,6 @@ public class Room extends BaseEntity {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "host_id")
-  private User host;
+  private UserEntity host;
 }
 

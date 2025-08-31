@@ -1,6 +1,6 @@
 package com.loco.loco_api.domain.room;
 
-import com.loco.loco_api.domain.user.User;
+import com.loco.loco_api.domain.user.UserEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -28,6 +28,6 @@ public class RoomParticipant {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "user_id")
-  private User user;
+  private UserEntity userEntity;
 }
 

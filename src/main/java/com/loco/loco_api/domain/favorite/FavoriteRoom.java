@@ -1,6 +1,6 @@
 package com.loco.loco_api.domain.favorite;
 
-import com.loco.loco_api.domain.user.User;
+import com.loco.loco_api.domain.user.UserEntity;
 import com.loco.loco_api.domain.room.Room;
 import jakarta.persistence.*;
 import lombok.*;
@@ -25,7 +25,7 @@ public class FavoriteRoom {
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "user_id")
-  private User user;
+  private UserEntity userEntity;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "room_id")
