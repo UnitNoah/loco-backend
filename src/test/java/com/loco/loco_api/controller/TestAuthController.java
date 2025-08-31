@@ -1,14 +1,13 @@
-// src/main/java/.../controller/TestAuthController.java
 package com.loco.loco_api.controller;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @RestController
 public class TestAuthController {
@@ -28,7 +27,7 @@ public class TestAuthController {
   public Map<String, Object> authorities(Authentication authentication) {
     var auths = authentication.getAuthorities().stream()
             .map(GrantedAuthority::getAuthority)
-            .collect(Collectors.toList());
+            .toList();
     return Map.of("authorities", auths);
   }
 }

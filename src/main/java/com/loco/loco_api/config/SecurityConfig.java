@@ -22,6 +22,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -101,7 +103,23 @@ public class SecurityConfig {
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
     http
-            .csrf(AbstractHttpConfigurer::disable)
+            .csrf(csrf -> {
+              CookieCsrfTokenRepository repo = CookieCsrfTokenRepository.withHttpOnlyFalse();
+              repo.setCookiePath("/");
+              repo.setCookieName("XSRF-TOKEN");       // SPA가 읽는 쿠키 이름
+              // 기본 헤더: X-XSRF-TOKEN
+              CsrfTokenRequestAttributeHandler handler = new CsrfTokenRequestAttributeHandler();
+
+              csrf
+                      .csrfTokenRepository(repo)
+                      .csrfTokenRequestHandler(handler)
+                      .ignoringRequestMatchers(
+                              "/.well-known/**",
+                              "/oauth2/**",
+                              "/login/**",
+                              "/actuator/**"
+                      );
+            })
             .formLogin(AbstractHttpConfigurer::disable)
             .httpBasic(AbstractHttpConfigurer::disable)
             .cors(Customizer.withDefaults()) // ↓ 아래 corsConfigurationSource() 사용
