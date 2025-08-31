@@ -24,16 +24,17 @@ import org.springframework.security.oauth2.server.resource.web.DefaultBearerToke
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.*;
+import org.springframework.http.HttpMethod;
 
-import java.util.List;
 import java.util.*;
-import java.util.stream.Collectors;
+
 
 @Configuration
 @EnableWebSecurity
@@ -114,10 +115,11 @@ public class SecurityConfig {
                       .csrfTokenRepository(repo)
                       .csrfTokenRequestHandler(handler)
                       .ignoringRequestMatchers(
-                              "/.well-known/**",
-                              "/oauth2/**",
-                              "/login/**",
-                              "/actuator/**"
+                              new AntPathRequestMatcher("/.well-known/**", HttpMethod.GET.name()),
+                              new AntPathRequestMatcher("/oauth2/authorization/**", HttpMethod.GET.name()),
+                              new AntPathRequestMatcher("/login/oauth2/code/**", HttpMethod.GET.name()),
+                              new AntPathRequestMatcher("/actuator/health", HttpMethod.GET.name()),
+                              new AntPathRequestMatcher("/actuator/info",   HttpMethod.GET.name())
                       );
             })
             .formLogin(AbstractHttpConfigurer::disable)
@@ -208,7 +210,7 @@ public class SecurityConfig {
                         .filter(s -> !s.isBlank())
                         .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
                         .map(SimpleGrantedAuthority::new)
-                        .collect(Collectors.toList())
+                        .toList()
         );
       } else if (roles instanceof String s) {
         for (String r : s.split(",")) {
