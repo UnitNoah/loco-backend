@@ -1,0 +1,11 @@
+package com.loco.loco_api.common.dto.room.request;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+
+@Schema(description = "방 생성 요청")
+public record RoomCreateRequest(
+    @Schema(description = "방 이름", example = "카공하기 좋은 카페") String name,
+    @Schema(description = "설명", example = "나만 알기 아까운") String description,
+    @Schema(description = "비공개 여부", example = "true") Boolean isPrivate,
+    @Schema(description = "썸네일 URL", example = "https://cdn.example.com/rooms/abc.png") String thumbnail
+) {}
