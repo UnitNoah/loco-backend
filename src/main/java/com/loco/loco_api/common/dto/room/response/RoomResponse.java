@@ -1,5 +1,6 @@
 package com.loco.loco_api.common.dto.room.response;
 
+import com.loco.loco_api.domain.room.Room;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "방 생성/조회 응답")
@@ -11,4 +12,16 @@ public record RoomResponse(
     @Schema(description = "썸네일 URL", example = "https://cdn.example.com/rooms/abc.png") String thumbnail,
     @Schema(description = "호스트 사용자 ID", example = "1") Long hostId,
     @Schema(description = "초대 코드", example = "aaaaa") String inviteCode
-    ){}
+    ){
+    public static RoomResponse from(Room room) {
+        return new RoomResponse(
+                room.getId(),
+                room.getName(),
+                room.getDescription(),
+                room.isPrivate(),
+                room.getThumbnail(),
+                room.getHost().getId(),
+                room.getInviteCode()
+        );
+    }
+}

@@ -6,15 +6,15 @@ import com.loco.loco_api.domain.room.Room;
 import com.loco.loco_api.domain.user.UserEntity;
 import com.loco.loco_api.repository.RoomRepository;
 import com.loco.loco_api.repository.UserRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
+@Transactional(readOnly = true)
 public class RoomService {
 
     private final RoomRepository rooms;
@@ -38,23 +38,17 @@ public class RoomService {
 
         Room saved = rooms.save(room);
 
-        return new RoomResponse(
-                saved.getId(),
-                saved.getName(),
-                saved.getDescription(),
-                saved.isPrivate(),
-                saved.getThumbnail(),
-                saved.getHost().getId(),
-                saved.getInviteCode()
-        );
+        return RoomResponse.from(saved);
     }
 
     private String generateUniqueInviteCode(int len) {
         String code;
-        do {
+        while (true) {
             code = randomCode(len);
-        } while (rooms.existsByInviteCode(code));
-        return code;
+            if (!rooms.existsByInviteCode(code)) {
+                return code;
+            }
+        }
     }
 
     private String randomCode(int len) {
