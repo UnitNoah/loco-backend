@@ -1,6 +1,6 @@
 package com.loco.loco_api.common.dto.oauth;
 
-import com.loco.loco_api.common.dto.user.UserDTO;
+import com.loco.loco_api.common.dto.user.request.UserDTO;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;

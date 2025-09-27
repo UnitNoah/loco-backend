@@ -1,4 +1,4 @@
-package com.loco.loco_api.common.dto.user;
+package com.loco.loco_api.common.dto.user.request;
 
 import lombok.Getter;
 import lombok.Setter;

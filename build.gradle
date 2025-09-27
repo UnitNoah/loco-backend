@@ -46,6 +46,7 @@ dependencies {
 	annotationProcessor 'org.projectlombok:lombok'                                   // Lombok 처리기
 	runtimeOnly 'org.postgresql:postgresql'                                          // PostgreSQL 드라이버
 
+	testImplementation 'org.springframework.security:spring-security-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'          // 테스트 의존성
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'                    // JUnit 런처
 }

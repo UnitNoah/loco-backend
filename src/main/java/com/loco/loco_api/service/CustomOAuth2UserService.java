@@ -4,7 +4,7 @@ import com.loco.loco_api.common.dto.oauth.GoogleResponse;
 import com.loco.loco_api.common.dto.oauth.NaverResponse;
 import com.loco.loco_api.common.dto.oauth.OAuth2Response;
 import com.loco.loco_api.common.dto.oauth.CustomOAuth2User;
-import com.loco.loco_api.common.dto.user.UserDTO;
+import com.loco.loco_api.common.dto.user.request.UserDTO;
 import com.loco.loco_api.domain.user.UserEntity;
 import com.loco.loco_api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
