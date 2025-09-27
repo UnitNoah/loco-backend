@@ -1,9 +1,9 @@
 package com.loco.loco_api.service;
 
+import com.loco.loco_api.common.dto.oauth.CustomOAuth2User;
 import com.loco.loco_api.common.dto.oauth.GoogleResponse;
 import com.loco.loco_api.common.dto.oauth.NaverResponse;
 import com.loco.loco_api.common.dto.oauth.OAuth2Response;
-import com.loco.loco_api.common.dto.oauth.CustomOAuth2User;
 import com.loco.loco_api.common.dto.user.request.UserDTO;
 import com.loco.loco_api.domain.user.UserEntity;
 import com.loco.loco_api.repository.UserRepository;
@@ -13,7 +13,6 @@ import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
-
 
 @Service
 @RequiredArgsConstructor
@@ -44,30 +43,37 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     String imageUrl = oAuth2Response.getProfileImageUrl(); // nullable
     String email    = oAuth2Response.getEmail();           // nullable
 
-    // 존재 여부 확인 후 업데이트/생성
-    UserEntity user = userRepository
-            .findByProviderAndOauthId(provider, oauthId)
-            .map(u -> { u.updateProfile(name, imageUrl, email); return u; })
+    // === 사용자 조회 ===
+    UserEntity user = userRepository.findByProviderAndOauthId(provider, oauthId)
+            .map(u -> {
+              // 탈퇴 여부 체크
+              if (u.getDeletedAt() != null) {
+                throw new OAuth2AuthenticationException("탈퇴한 회원입니다.");
+              }
+              u.updateProfile(name, imageUrl, email);
+              return u;
+            })
             .orElseGet(() -> userRepository.save(
                     UserEntity.builder()
                             .provider(provider)
                             .oauthId(oauthId)
-                            .email(email)              // << 신규 생성 시 이메일 저장 (누락 금지)
+                            .email(email)
                             .nickname(name)
                             .profileImageUrl(imageUrl)
                             .build()
             ));
 
-    // 표시용 이름 폴백
+    // 표시용 이름 (fallback)
     String displayName =
             (user.getNickname() != null && !user.getNickname().isBlank()) ? user.getNickname()
-                    : (user.getEmail() != null && !user.getEmail().isBlank())       ? user.getEmail()
+                    : (user.getEmail() != null && !user.getEmail().isBlank())     ? user.getEmail()
                     : provider + " " + oauthId;
 
+    // Security context에 넘길 DTO 구성
     UserDTO userDTO = new UserDTO();
     userDTO.setUsername(provider + " " + oauthId);  // 내부 식별용
     userDTO.setName(displayName);
-    userDTO.setRole("ROLE_USER");
+    userDTO.setRole("ROLE_USER"); // 추후 role 컬럼 추가해서 DB 값으로 매핑 가능
 
     return new CustomOAuth2User(userDTO);
   }

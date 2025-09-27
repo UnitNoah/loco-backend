@@ -33,7 +33,13 @@ public class UserService {
     String provider = parts[0];
     String oauthId  = parts[1];
 
-    return userRepository.findByProviderAndOauthId(provider, oauthId)
+    UserEntity user = userRepository.findByProviderAndOauthId(provider, oauthId)
             .orElseThrow(() -> new RuntimeException("User not found"));
+
+    if (user.getDeletedAt() != null) {
+      throw new RuntimeException("탈퇴한 회원입니다.");
+    }
+
+    return user;
   }
 }

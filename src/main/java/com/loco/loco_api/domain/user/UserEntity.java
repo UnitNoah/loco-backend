@@ -4,6 +4,8 @@ import com.loco.loco_api.common.entity.UserAuditableEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(
         name = "users",
@@ -32,17 +34,23 @@ public class UserEntity extends UserAuditableEntity {
 
   private String profileImageUrl;
 
-  @org.hibernate.annotations.CreationTimestamp
-  @Column(updatable = false)
-  private java.time.LocalDateTime createdAt;
-
-  @org.hibernate.annotations.UpdateTimestamp
-  private java.time.LocalDateTime updatedAt;
+  @Column(name = "deleted_at")
+  private LocalDateTime deletedAt;
 
   /** null/blank는 덮어쓰지 않도록 방어 */
   public void updateProfile(String nickname, String profileImageUrl, String email) {
     if (nickname != null && !nickname.isBlank()) this.nickname = nickname;
     if (profileImageUrl != null && !profileImageUrl.isBlank()) this.profileImageUrl = profileImageUrl;
     if (email != null && !email.isBlank()) this.email = email;
+  }
+
+  /** 회원 탈퇴 (소프트 삭제 처리) */
+  public void delete() {
+    this.deletedAt = java.time.LocalDateTime.now();
+  }
+
+  /** 현재 활성 상태 여부 */
+  public boolean isActive() {
+    return this.deletedAt == null;
   }
 }
