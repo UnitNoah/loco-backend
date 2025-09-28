@@ -71,7 +71,8 @@ public enum ErrorCode {
   // 서버 오류
   INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 5000, "서버 내부 오류입니다."),
   DATABASE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 5000, "데이터베이스 오류가 발생했습니다."),
-  EXTERNAL_API_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 5000, "외부 API 호출 중 오류가 발생했습니다.");
+  EXTERNAL_API_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 5000, "외부 API 호출 중 오류가 발생했습니다."),
+  USER_ALREADY_DELETED(HttpStatus.BAD_REQUEST, 5000, "이미 탈퇴한 회원입니다."),;
 
   private final HttpStatus httpStatus;
   private final int code;           // 시스템 내부 관리용 숫자 코드

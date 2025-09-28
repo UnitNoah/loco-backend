@@ -53,4 +53,10 @@ public class UserEntity extends UserAuditableEntity {
   public boolean isActive() {
     return this.deletedAt == null;
   }
+
+  /** 유저 정보 수정 */
+  public void updateProfile(String nickname, String profileImageUrl) {
+    this.nickname = nickname;
+    this.profileImageUrl = profileImageUrl;
+  }
 }
