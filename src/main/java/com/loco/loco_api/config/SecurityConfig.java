@@ -170,6 +170,7 @@ public class SecurityConfig {
                               Map.of(
                                       "email", principal.getEmail(),
                                       "nickname", displayName,
+                                      "profileImage", principal.getUser().getProfileImage(), // 추가
                                       "roles", List.of(principal.getRole() == null ? "ROLE_USER" : principal.getRole())
                               )
                       );

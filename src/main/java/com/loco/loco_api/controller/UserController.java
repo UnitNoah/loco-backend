@@ -6,7 +6,10 @@ import com.loco.loco_api.common.dto.user.response.UserResponse;
 import com.loco.loco_api.common.response.ApiResponse;
 import com.loco.loco_api.domain.user.UserEntity;
 import com.loco.loco_api.service.UserService;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseCookie;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
@@ -59,5 +62,19 @@ public class UserController {
     userService.deleteUser(jwt);
 
     return ApiResponse.success(new UserDeleteResponse("회원 탈퇴가 완료되었습니다."));
+  }
+
+  @PostMapping("/logout")
+  public ApiResponse<String> logout(HttpServletResponse response) {
+    // access_token 쿠키 삭제
+    ResponseCookie cookie = ResponseCookie.from("access_token", "")
+            .path("/")
+            .maxAge(0)
+            .httpOnly(true)
+            .sameSite("Lax")
+            .build();
+    response.addHeader("Set-Cookie", cookie.toString());
+
+    return ApiResponse.success("로그아웃이 완료되었습니다.");
   }
 }

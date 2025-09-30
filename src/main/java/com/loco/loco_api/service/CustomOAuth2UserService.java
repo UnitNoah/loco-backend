@@ -74,7 +74,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     userDTO.setOauthId(oauthId);
     userDTO.setEmail(user.getEmail());
     userDTO.setName(displayName);
-    userDTO.setRole("ROLE_USER"); // 추후 DB role 컬럼 매핑 가능
+    userDTO.setRole("ROLE_USER");
+    userDTO.setProfileImage(user.getProfileImageUrl());
 
     return new CustomOAuth2User(userDTO, oAuth2User.getAttributes());
   }
