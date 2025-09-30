@@ -11,6 +11,9 @@ public record UserResponse(
         @Schema(description = "닉네임 / 표시 이름", example = "이안")
         String name,
 
+        @Schema(description = "이메일 주소", example = "test@example.com")
+        String email,
+
         @Schema(description = "프로필 이미지 URL", example = "https://cdn.loco.com/profile/abc.jpg")
         String profileImage,
 

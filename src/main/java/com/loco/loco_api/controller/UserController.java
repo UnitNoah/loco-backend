@@ -28,6 +28,7 @@ public class UserController {
     UserResponse response = new UserResponse(
             user.getId().toString(),
             user.getNickname(),
+            user.getEmail(),
             user.getProfileImageUrl(),
             List.of("ROLE_USER") // 추후 UserEntity에 role 컬럼을 추가해서 매핑
     );
@@ -45,6 +46,7 @@ public class UserController {
     UserResponse response = new UserResponse(
             updatedUser.getId().toString(),
             updatedUser.getNickname(),
+            updatedUser.getEmail(),
             updatedUser.getProfileImageUrl(),
             List.of("ROLE_USER")
     );

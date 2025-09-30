@@ -36,5 +36,7 @@ out/
 ### VS Code ###
 .vscode/
 
+# JWT 키
+src/main/resources/jwt/private.pem
 
 **/application-secret.yml

@@ -24,7 +24,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
   @org.springframework.transaction.annotation.Transactional
   public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
     OAuth2User oAuth2User = super.loadUser(userRequest);
-    String registrationId = userRequest.getClientRegistration().getRegistrationId(); // google/naver
+    String registrationId = userRequest.getClientRegistration().getRegistrationId(); // google/naver/kakao
 
     OAuth2Response oAuth2Response = switch (registrationId) {
       case "google" -> new GoogleResponse(oAuth2User.getAttributes());
@@ -33,8 +33,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
       default -> throw new OAuth2AuthenticationException("Unsupported provider: " + registrationId);
     };
 
-    String provider = oAuth2Response.getProvider();
-    String oauthId  = oAuth2Response.getProviderId();
+    String provider = oAuth2Response.getProvider();       // google/naver/kakao
+    String oauthId  = oAuth2Response.getProviderId();     // 소셜 유저 ID
     if (provider == null || provider.isBlank() || oauthId == null || oauthId.isBlank()) {
       throw new OAuth2AuthenticationException("Missing provider/providerId");
     }
@@ -43,10 +43,9 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     String imageUrl = oAuth2Response.getProfileImageUrl(); // nullable
     String email    = oAuth2Response.getEmail();           // nullable
 
-    // === 사용자 조회 ===
+    // === 사용자 조회 or 신규 생성 ===
     UserEntity user = userRepository.findByProviderAndOauthId(provider, oauthId)
             .map(u -> {
-              // 탈퇴 여부 체크
               if (u.getDeletedAt() != null) {
                 throw new OAuth2AuthenticationException("탈퇴한 회원입니다.");
               }
@@ -63,19 +62,21 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                             .build()
             ));
 
-    // 표시용 이름 (fallback)
+    // 표시용 이름 (fallback: 닉네임 → 이메일 → provider_id)
     String displayName =
             (user.getNickname() != null && !user.getNickname().isBlank()) ? user.getNickname()
                     : (user.getEmail() != null && !user.getEmail().isBlank())     ? user.getEmail()
-                    : provider + " " + oauthId;
+                    : provider + "_" + oauthId;
 
-    // Security context에 넘길 DTO 구성
+    // === Security Context로 넘길 DTO 생성 ===
     UserDTO userDTO = new UserDTO();
-    userDTO.setUsername(provider + " " + oauthId);  // 내부 식별용
+    userDTO.setProvider(provider);
+    userDTO.setOauthId(oauthId);
+    userDTO.setEmail(user.getEmail());
     userDTO.setName(displayName);
-    userDTO.setRole("ROLE_USER"); // 추후 role 컬럼 추가해서 DB 값으로 매핑 가능
+    userDTO.setRole("ROLE_USER"); // 추후 DB role 컬럼 매핑 가능
 
-    return new CustomOAuth2User(userDTO);
+    return new CustomOAuth2User(userDTO, oAuth2User.getAttributes());
   }
 }
 

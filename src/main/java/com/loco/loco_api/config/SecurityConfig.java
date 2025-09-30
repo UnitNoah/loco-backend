@@ -3,11 +3,12 @@ package com.loco.loco_api.config;
 import com.loco.loco_api.common.dto.oauth.CustomOAuth2User;
 import com.loco.loco_api.service.CustomOAuth2UserService;
 import com.loco.loco_api.service.JwtService;
+import com.nimbusds.jose.jwk.RSAKey;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -16,7 +17,8 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
-
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
@@ -29,11 +31,10 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import org.springframework.security.oauth2.core.OAuth2TokenValidator;
-import org.springframework.security.oauth2.jwt.*;
-import org.springframework.http.HttpMethod;
-
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 
 
 @Configuration
@@ -50,21 +51,18 @@ public class SecurityConfig {
    * 반환된 디코더는 리소스 서버의 JWT 검증에 자동 사용된다.
    */
   @Bean
-  JwtDecoder jwtDecoder(
-          @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}") String jwkSetUri,
-          @Value("${security.jwt.issuer:https://api.loco.com}") String issuer,       // 발급 시 넣은 iss
-          @Value("${security.jwt.audience:loco-web}") String audience               // 발급 시 넣은 aud 항목
-  ) {
-    NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+  public JwtDecoder jwtDecoder(RSAKey rsaJwk) throws Exception {
+    NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(rsaJwk.toRSAPublicKey()).build();
 
-    OAuth2TokenValidator<Jwt> withIssuer =
-            JwtValidators.createDefaultWithIssuer(issuer); // iss 검증
+    // iss / aud 검증
+    OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer("https://api.loco.com");
     OAuth2TokenValidator<Jwt> withAudience =
-            new JwtClaimValidator<List<String>>("aud", aud -> aud != null && aud.contains(audience)); // aud 검증
+            new JwtClaimValidator<List<String>>("aud", aud -> aud != null && aud.contains("loco-web"));
 
     decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(withIssuer, withAudience));
     return decoder;
   }
+
 
   /**
    * Bearer 토큰 추출 전략을 정의한다.
@@ -154,7 +152,9 @@ public class SecurityConfig {
                       CustomOAuth2User principal = (CustomOAuth2User) auth.getPrincipal();
 
                       // sub: 내부 식별자(예: "google 1234567890")
-                      String sub = principal.getUsername();
+                      String provider = principal.getProvider();   // 예: "naver"
+                      String oauthId = principal.getOauthId();     // 예: "boOTp5wO4T..."
+                      String sub = provider + "_" + oauthId;
 
                       // 표시명: DTO에 getDisplayName() 있으면 사용, 없으면 폴백
                       String displayName;
@@ -167,7 +167,11 @@ public class SecurityConfig {
                       // roles 클레임은 List<String> 형태 권장 (예: ["ROLE_USER"])
                       String access = jwtService.issueAccessToken(
                               sub,
-                              Map.of("name", displayName, "roles", List.of(principal.getRole() == null ? "ROLE_USER" : principal.getRole()))
+                              Map.of(
+                                      "email", principal.getEmail(),
+                                      "nickname", displayName,
+                                      "roles", List.of(principal.getRole() == null ? "ROLE_USER" : principal.getRole())
+                              )
                       );
 
                       // 쿠키 옵션: 크로스도메인 로그인이라면 SameSite=None; Secure 필요(HTTPS 필수)
@@ -175,7 +179,7 @@ public class SecurityConfig {
                       setCookie(res, "access_token", access, 900, true, secure, "/", secure ? "None" : "Lax");
 
                       // TODO: refresh 토큰 발급/저장 전략 추가(쿠키/DB/Redis 등)
-                      res.sendRedirect("/"); // 필요한 경로로 변경
+                      res.sendRedirect("http://localhost:3000"); // 필요한 경로로 변경
                     })
                     .failureHandler((req, res, ex) -> res.sendError(HttpServletResponse.SC_UNAUTHORIZED))
             )
