@@ -1,5 +1,8 @@
 package com.loco.loco_api.service;
 
+import com.loco.loco_api.common.dto.user.request.UserUpdateRequest;
+import com.loco.loco_api.common.exception.CustomException;
+import com.loco.loco_api.common.exception.ErrorCode;
 import com.loco.loco_api.domain.user.UserEntity;
 import com.loco.loco_api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,17 +32,79 @@ public class UserService {
 
   // JWT에서 sub 파싱 + DB 조회까지 한 번에 처리
   public UserEntity getCurrentUser(Jwt jwt) {
-    String[] parts = jwt.getSubject().split(" ");
+    String sub = jwt.getSubject();
+    if (sub == null || !sub.contains("_")) {
+      throw new CustomException(ErrorCode.AUTH_INVALID_TOKEN);
+    }
+
+    String[] parts = sub.split("_", 2);
     String provider = parts[0];
     String oauthId  = parts[1];
 
     UserEntity user = userRepository.findByProviderAndOauthId(provider, oauthId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
     if (user.getDeletedAt() != null) {
-      throw new RuntimeException("탈퇴한 회원입니다.");
+      throw new CustomException(ErrorCode.USER_ALREADY_DELETED);
     }
 
     return user;
   }
+
+
+  /**
+   * 회원 정보 수정
+   * @param jwt
+   * @param request
+   * @return
+   */
+  @Transactional
+  public UserEntity updateUser(Jwt jwt, UserUpdateRequest request) {
+    UserEntity user = getCurrentUser(jwt);
+    if (user == null) {
+      throw new CustomException(ErrorCode.USER_NOT_FOUND);
+    }
+
+    // 탈퇴 회원 수정 불가
+    if (user.getDeletedAt() != null) {
+      throw new CustomException(ErrorCode.USER_ALREADY_DELETED);
+    }
+
+    // 닉네임 유효성 검사
+    if (request.nickname() == null || request.nickname().isBlank()) {
+      throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+    }
+    if (request.nickname().length() > 20) {
+      throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+    }
+
+    // TODO: 프로필 이미지 URL 형식 검사 추가해야함
+//    if () {
+//      throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+//    }
+
+    user.updateProfile(request.nickname(), request.profileImageUrl());
+    return userRepository.save(user);
+  }
+
+  /**
+   * 회원 탈퇴(soft delete)
+   * @param jwt
+   */
+  @Transactional
+  public void deleteUser(Jwt jwt) {
+    UserEntity user = getCurrentUser(jwt);
+    if (user == null) {
+      throw new CustomException(ErrorCode.USER_NOT_FOUND);
+    }
+
+    // 이미 탈퇴한 회원
+    if (user.getDeletedAt() != null) {
+      throw new CustomException(ErrorCode.USER_ALREADY_DELETED);
+    }
+
+    user.delete();
+    userRepository.save(user);
+  }
+
 }

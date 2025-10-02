@@ -13,20 +13,23 @@ public class JwtService {
 
   private final JwtEncoder encoder;
 
-  public JwtService(JwtEncoder encoder) { this.encoder = encoder; }
+  public JwtService(JwtEncoder encoder) {
+    this.encoder = encoder;
+  }
 
   public String issueAccessToken(String subject, Map<String, Object> claims) {
     Instant now = Instant.now();
     JwtClaimsSet claimSet = JwtClaimsSet.builder()
             .issuer("https://api.loco.com")
-            .subject(subject)                 // 예: "google 1234567890"
+            .subject(subject)
+            .audience(List.of("loco-web"))
             .issuedAt(now)
-            .expiresAt(now.plusSeconds(900))  // 15분
+            .expiresAt(now.plusSeconds(900))
             .claim("roles", List.of("ROLE_USER"))
+            // ↓ email, nickname 같이 들어가도록 claims 확장
             .claims(c -> c.putAll(claims))
             .build();
 
-    // 헤더에 kid/알고리즘 명시
     JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256)
             .type("JWT")
             .build();

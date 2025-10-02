@@ -11,10 +11,9 @@ import java.util.Map;
 
 public class CustomOAuth2User implements OAuth2User {
 
-  // 필요시 전체 DTO 접근
   @Getter
-  private final UserDTO user;                       // username, name, role, email 등
-  private final Map<String, Object> attributes;     // 원본 OAuth2 attributes(옵션)
+  private final UserDTO user;                   // provider, oauthId, email, name, role
+  private final Map<String, Object> attributes; // 원본 attributes
 
   public CustomOAuth2User(UserDTO user) {
     this(user, Map.of());
@@ -27,7 +26,7 @@ public class CustomOAuth2User implements OAuth2User {
 
   @Override
   public Map<String, Object> getAttributes() {
-    return attributes; // null 반환 금지
+    return attributes;
   }
 
   @Override
@@ -36,14 +35,45 @@ public class CustomOAuth2User implements OAuth2User {
     return List.of(new SimpleGrantedAuthority(role));
   }
 
-  /** OAuth2User.getName(): 고유 식별자 반환 권장(표시명 아님) */
+  /**
+   * Spring Security에서 내부적으로 식별자로 쓰는 값.
+   * 여기서는 provider + "_" + oauthId 조합을 반환.
+   */
   @Override
   public String getName() {
-    return user.getUsername(); // 예: "google 1234567890"
+    return getSub();
   }
 
-  // 편의 메서드
-  public String getUsername() { return user.getUsername(); }
-  public String getDisplayName() { return user.getName(); }  // 화면 표기용
-  public String getRole() { return user.getRole(); }         // ← 추가
+  /** === 편의 메서드 === */
+
+  /** JWT sub 값: provider + "_" + oauthId */
+  public String getSub() {
+    return getProvider() + "_" + getOauthId();
+  }
+
+  /** 화면에 표시할 닉네임/이름 */
+  public String getDisplayName() {
+    return user.getName();
+  }
+
+  /** 권한 */
+  public String getRole() {
+    return user.getRole();
+  }
+
+  /** provider (google/naver/kakao) */
+  public String getProvider() {
+    return user.getProvider();
+  }
+
+  /** 소셜 제공자의 고유 userId */
+  public String getOauthId() {
+    return user.getOauthId();
+  }
+
+  /** 이메일 (동의 안하면 null일 수 있음) */
+  public String getEmail() {
+    return user.getEmail();
+  }
 }
+

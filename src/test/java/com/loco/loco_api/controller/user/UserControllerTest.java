@@ -1,4 +1,4 @@
-package com.loco.loco_api.controller;
+package com.loco.loco_api.controller.user;
 
 import com.loco.loco_api.domain.user.UserEntity;
 import com.loco.loco_api.repository.UserRepository;
@@ -45,5 +45,6 @@ class UserIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.name").value("이안"));
   }
+
 }
 

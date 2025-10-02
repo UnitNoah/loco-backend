@@ -1,13 +1,16 @@
 package com.loco.loco_api.config;
 
 import com.loco.loco_api.common.dto.oauth.CustomOAuth2User;
+import com.loco.loco_api.domain.user.UserEntity;
+import com.loco.loco_api.repository.UserRepository;
 import com.loco.loco_api.service.CustomOAuth2UserService;
 import com.loco.loco_api.service.JwtService;
+import com.nimbusds.jose.jwk.RSAKey;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -15,8 +18,13 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserRequest;
+import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserService;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
-
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
@@ -29,11 +37,10 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import org.springframework.security.oauth2.core.OAuth2TokenValidator;
-import org.springframework.security.oauth2.jwt.*;
-import org.springframework.http.HttpMethod;
-
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 
 
 @Configuration
@@ -50,21 +57,22 @@ public class SecurityConfig {
    * 반환된 디코더는 리소스 서버의 JWT 검증에 자동 사용된다.
    */
   @Bean
-  JwtDecoder jwtDecoder(
-          @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}") String jwkSetUri,
-          @Value("${security.jwt.issuer:https://api.loco.com}") String issuer,       // 발급 시 넣은 iss
-          @Value("${security.jwt.audience:loco-web}") String audience               // 발급 시 넣은 aud 항목
-  ) {
-    NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+  public JwtDecoder jwtDecoder(RSAKey rsaJwk) throws Exception {
+    NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(rsaJwk.toRSAPublicKey()).build();
 
+    // 내 서버에서 발급한 JWT의 iss 값과 맞춰야 함
     OAuth2TokenValidator<Jwt> withIssuer =
-            JwtValidators.createDefaultWithIssuer(issuer); // iss 검증
+            JwtValidators.createDefaultWithIssuer("https://api.loco.com");
+
     OAuth2TokenValidator<Jwt> withAudience =
-            new JwtClaimValidator<List<String>>("aud", aud -> aud != null && aud.contains(audience)); // aud 검증
+            new JwtClaimValidator<List<String>>("aud",
+                    aud -> aud != null && aud.contains("loco-web"));
 
     decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(withIssuer, withAudience));
     return decoder;
   }
+
+
 
   /**
    * Bearer 토큰 추출 전략을 정의한다.
@@ -139,7 +147,8 @@ public class SecurityConfig {
                             "/.well-known/jwks.json",
                             "/oauth2/**", "/login/**",
                             "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
-                            "/error"
+                            "/error",
+                            "/api/v1/users/logout"   // 로그아웃 허용
                     ).permitAll()
                     .anyRequest().authenticated()
             )
@@ -149,34 +158,53 @@ public class SecurityConfig {
 
             // OAuth2 로그인 + 성공/실패 핸들러
             .oauth2Login(oauth -> oauth
-                    .userInfoEndpoint(ui -> ui.userService(customOAuth2UserService))
+                    .userInfoEndpoint(ui -> ui
+                            // 일반 OAuth2 (네이버) 요청은 CustomOAuth2UserService로 처리
+                            .userService(customOAuth2UserService)
+                    )
                     .successHandler((req, res, auth) -> {
-                      CustomOAuth2User principal = (CustomOAuth2User) auth.getPrincipal();
+                      Object principal = auth.getPrincipal();
 
-                      // sub: 내부 식별자(예: "google 1234567890")
-                      String sub = principal.getUsername();
+                      String provider, oauthId, email, displayName, profileImage;
 
-                      // 표시명: DTO에 getDisplayName() 있으면 사용, 없으면 폴백
-                      String displayName;
-                      try {
-                        displayName = principal.getDisplayName(); // 너가 구현해둔 메서드
-                      } catch (NoSuchMethodError | Exception ignored) {
-                        displayName = principal.getName(); // 없으면 현재 구현대로
+                      if (principal instanceof CustomOAuth2User cu) {
+                        // 네이버/카카오
+                        provider     = cu.getProvider();
+                        oauthId      = cu.getOauthId();
+                        email        = cu.getEmail();
+                        displayName  = cu.getName();
+                        profileImage = cu.getUser().getProfileImage();
+                      }
+                      else if (principal instanceof org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser gu) {
+                        // 구글
+                        provider     = "google";
+                        oauthId      = gu.getSubject();
+                        email        = (String) gu.getAttributes().get("email");
+                        displayName  = (String) gu.getAttributes().getOrDefault("name", email);
+                        profileImage = (String) gu.getAttributes().get("picture");
+                      }
+                      else {
+                        throw new IllegalStateException("Unexpected principal type: " + principal.getClass());
                       }
 
-                      // roles 클레임은 List<String> 형태 권장 (예: ["ROLE_USER"])
+                      String sub = provider + "_" + oauthId;
+
                       String access = jwtService.issueAccessToken(
                               sub,
-                              Map.of("name", displayName, "roles", List.of(principal.getRole() == null ? "ROLE_USER" : principal.getRole()))
+                              Map.of(
+                                      "email", email,
+                                      "nickname", displayName,   // 프론트에서 nickname 클레임 읽고 있음
+                                      "profileImage", profileImage,
+                                      "roles", List.of("ROLE_USER")
+                              )
                       );
 
-                      // 쿠키 옵션: 크로스도메인 로그인이라면 SameSite=None; Secure 필요(HTTPS 필수)
                       boolean secure = isSecure(req);
                       setCookie(res, "access_token", access, 900, true, secure, "/", secure ? "None" : "Lax");
 
-                      // TODO: refresh 토큰 발급/저장 전략 추가(쿠키/DB/Redis 등)
-                      res.sendRedirect("/"); // 필요한 경로로 변경
+                      res.sendRedirect("http://localhost:3000");
                     })
+
                     .failureHandler((req, res, ex) -> res.sendError(HttpServletResponse.SC_UNAUTHORIZED))
             )
 
@@ -288,6 +316,40 @@ public class SecurityConfig {
     if (secure) sb.append("; Secure");
     res.addHeader("Set-Cookie", sb.toString());
   }
+
+  @Bean
+  public OidcUserService customOidcUserService(UserRepository userRepository) {
+    return new OidcUserService() {
+      @Override
+      public OidcUser loadUser(OidcUserRequest userRequest) throws OAuth2AuthenticationException {
+        OidcUser oidcUser = super.loadUser(userRequest);
+
+        String provider = "google";
+        String oauthId = oidcUser.getSubject();
+        String email   = (String) oidcUser.getAttributes().get("email");
+        String name    = (String) oidcUser.getAttributes().get("name");
+        String picture = (String) oidcUser.getAttributes().get("picture");
+
+        userRepository.findByProviderAndOauthId(provider, oauthId)
+                .map(u -> {
+                  u.updateProfile(name, picture, email);
+                  return u;
+                })
+                .orElseGet(() -> userRepository.save(
+                        UserEntity.builder()
+                                .provider(provider)
+                                .oauthId(oauthId)
+                                .email(email)
+                                .nickname(name)
+                                .profileImageUrl(picture)
+                                .build()
+                ));
+
+        return oidcUser;
+      }
+    };
+  }
+
 
   /**
    * 요청이 HTTPS로 들어왔는지 판단한다.
