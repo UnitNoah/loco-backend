@@ -56,7 +56,8 @@ public class UserEntity extends UserAuditableEntity {
 
   /** 유저 정보 수정 */
   public void updateProfile(String nickname, String profileImageUrl) {
-    this.nickname = nickname;
-    this.profileImageUrl = profileImageUrl;
+    if (nickname != null && !nickname.isBlank()) this.nickname = nickname;
+    if (profileImageUrl != null && !profileImageUrl.isBlank()) this.profileImageUrl = profileImageUrl;
+    if (email != null && !email.isBlank()) this.email = email;
   }
 }

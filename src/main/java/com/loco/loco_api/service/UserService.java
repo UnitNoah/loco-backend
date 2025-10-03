@@ -70,14 +70,15 @@ public class UserService {
       throw new CustomException(ErrorCode.USER_ALREADY_DELETED);
     }
 
-    // 닉네임 유효성 검사
-    if (request.nickname() == null || request.nickname().isBlank()) {
-      throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
-    }
-    if (request.nickname().length() > 20) {
+    // 닉네임,이미지 유효성 검사
+    if ((request.nickname() == null || request.nickname().isBlank())
+            && (request.profileImageUrl() == null || request.profileImageUrl().isBlank())) {
       throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
     }
 
+    if (request.nickname().length() > 20) {
+      throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+    }
     // TODO: 프로필 이미지 URL 형식 검사 추가해야함
 //    if () {
 //      throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
