@@ -5,6 +5,7 @@ import com.loco.loco_api.common.dto.room.response.RoomResponse;
 import com.loco.loco_api.common.response.ApiResponse;
 import com.loco.loco_api.service.RoomService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -18,6 +19,16 @@ import org.springframework.web.bind.annotation.*;
 @SecurityRequirement(name = "JWT")
 public class RoomController {
     private final RoomService service;
+
+    @GetMapping("/{id}")
+    @Operation(summary = "방 상세 조회", description = "단건 방 상세를 조회합니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "성공")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "방 없음")
+    public ApiResponse<RoomResponse> getRoom(
+            @Parameter(description = "방 ID", example = "1") @PathVariable Long id
+    ) {
+        return ApiResponse.success(service.getDetail(id));
+    }
 
     @PostMapping
     @Operation(summary = "방 생성", description = "새로운 방을 생성합니다.")

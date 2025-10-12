@@ -2,6 +2,8 @@ package com.loco.loco_api.service;
 
 import com.loco.loco_api.common.dto.room.request.RoomCreateRequest;
 import com.loco.loco_api.common.dto.room.response.RoomResponse;
+import com.loco.loco_api.common.exception.CustomException;
+import com.loco.loco_api.common.exception.ErrorCode;
 import com.loco.loco_api.domain.room.Room;
 import com.loco.loco_api.domain.user.UserEntity;
 import com.loco.loco_api.repository.RoomRepository;
@@ -21,6 +23,11 @@ public class RoomService {
     private final UserRepository users;
     private final SecureRandom random = new SecureRandom();
     private static final String ALPHANUM = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no confusing chars
+
+    public RoomResponse getDetail(Long roomId) {
+        Room room = rooms.findById(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+        return RoomResponse.from(room);
+    }
 
     @Transactional
     public RoomResponse create(RoomCreateRequest req, Long hostId) {
