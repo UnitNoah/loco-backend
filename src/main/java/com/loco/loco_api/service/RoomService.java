@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -24,11 +25,23 @@ public class RoomService {
     private final SecureRandom random = new SecureRandom();
     private static final String ALPHANUM = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no confusing chars
 
+    // 방 상세 조회
     public RoomResponse getDetail(Long roomId) {
         Room room = rooms.findById(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
         return RoomResponse.from(room);
     }
 
+    // 공개방 목록
+    public List<RoomResponse> listPublic() {
+        return rooms.findByIsPrivateFalseOrderByCreatedAtDesc().stream().map(RoomResponse::from).toList();
+    }
+
+    // 비공개방 목록 (created
+    public List<RoomResponse> listPrivate() {
+        return rooms.findByIsPrivateTrueOrderByCreatedAtDesc().stream().map(RoomResponse::from).toList();
+    }
+
+    // 방 생성
     @Transactional
     public RoomResponse create(RoomCreateRequest req, Long hostId) {
         UserEntity host = users.findById(hostId).orElseThrow(() -> new IllegalArgumentException("Host user not found: " + hostId));
@@ -65,4 +78,6 @@ public class RoomService {
         }
         return sb.toString();
     }
+
+
 }

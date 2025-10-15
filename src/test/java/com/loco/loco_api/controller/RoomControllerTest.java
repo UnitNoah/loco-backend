@@ -14,6 +14,8 @@ import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -61,6 +63,55 @@ class RoomControllerTest {
         mvc.perform(get("/api/v1/rooms/{roomId}", 999L).with(user("tester").roles("USER")))
                 .andExpect(status().isNotFound());
     }
+
+    // 공개방 목록
+    @Test
+    void listPublic_returns200WithArray() throws Exception {
+        var r1 = new RoomResponse(3L,"공개3","d",false,"t",10L,"C3");
+        var r2 = new RoomResponse(2L,"공개2","d",false,"t",10L,"C2");
+        var r3 = new RoomResponse(1L,"공개1","d",false,"t",10L,"C1");
+        when(roomService.listPublic()).thenReturn(List.of(r1, r2, r3));
+
+        mvc.perform(get("/api/v1/rooms/public").with(user("tester").roles("USER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.length()").value(3))
+                .andExpect(jsonPath("$.data[0].is_private").value(false))
+                .andExpect(jsonPath("$.data[1].is_private").value(false))
+                .andExpect(jsonPath("$.data[2].is_private").value(false))
+                .andExpect(jsonPath("$.data[0].id").value(3))
+                .andExpect(jsonPath("$.data[1].id").value(2))
+                .andExpect(jsonPath("$.data[2].id").value(1));
+    }
+
+    // 비공개방 목록
+    @Test
+    void listPrivate_returns200WithArray() throws Exception {
+        var r1 = new RoomResponse(5L,"비공개5","d",true,"t",10L,"X5");
+        var r2 = new RoomResponse(4L,"비공개4","d",true,"t",10L,"X4");
+        when(roomService.listPrivate()).thenReturn(List.of(r1, r2));
+
+        mvc.perform(get("/api/v1/rooms/private").with(user("tester").roles("USER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].is_private").value(true))
+                .andExpect(jsonPath("$.data[1].is_private").value(true))
+                .andExpect(jsonPath("$.data[0].id").value(5))
+                .andExpect(jsonPath("$.data[1].id").value(4));
+    }
+
+    @Test
+    void listPublic_empty_returnsEmptyArray() throws Exception {
+        when(roomService.listPublic()).thenReturn(List.of());
+
+        mvc.perform(get("/api/v1/rooms/public").with(user("tester").roles("USER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data.length()").value(0));
+    }
+
 
     // 방 생성
     @Test

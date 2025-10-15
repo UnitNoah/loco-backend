@@ -13,13 +13,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class RoomServiceTest {
@@ -67,6 +67,60 @@ class RoomServiceTest {
         assertThatThrownBy(() -> roomService.getDetail(999L))
                 .isInstanceOf(CustomException.class)
                 .hasMessageContaining("해당 방을 찾을 수 없습니다.");
+    }
+
+    // 공개방 목록 조회
+    void listPublic_filtersAndMaps_inCreatedAtDescOrder() {
+        var host = UserEntity.builder().id(42L).nickname("홍길동").provider("google").oauthId("x").build();
+
+        // Assume repository already returns in createdAt DESC order
+        var r3 = Room.builder().id(3L).name("공개3").description("d").isPrivate(false).inviteCode("C3").thumbnail("t").host(host).build();
+        var r2 = Room.builder().id(2L).name("공개2").description("d").isPrivate(false).inviteCode("C2").thumbnail("t").host(host).build();
+        var r1 = Room.builder().id(1L).name("공개1").description("d").isPrivate(false).inviteCode("C1").thumbnail("t").host(host).build();
+
+        when(rooms.findByIsPrivateFalseOrderByCreatedAtDesc()).thenReturn(List.of(r3, r2, r1));
+
+        List<RoomResponse> list = roomService.listPublic();
+
+        assertThat(list).hasSize(3);
+        assertThat(list).extracting(RoomResponse::id).containsExactly(3L, 2L, 1L);
+        assertThat(list).allMatch(rr -> rr.isPrivate() == false);
+
+        verify(rooms, times(1)).findByIsPrivateFalseOrderByCreatedAtDesc();
+        verifyNoMoreInteractions(rooms);
+    }
+
+
+
+    // 비공개방 목록 조회
+    @Test
+    void listPrivate_filtersAndMaps_inCreatedAtDescOrder() {
+        var host = UserEntity.builder().id(7L).nickname("이몽룡").provider("google").oauthId("y").build();
+
+        var r5 = Room.builder().id(5L).name("비공개5").description("d").isPrivate(true).inviteCode("X5").thumbnail("t").host(host).build();
+        var r4 = Room.builder().id(4L).name("비공개4").description("d").isPrivate(true).inviteCode("X4").thumbnail("t").host(host).build();
+
+        when(rooms.findByIsPrivateTrueOrderByCreatedAtDesc()).thenReturn(List.of(r5, r4));
+
+        List<RoomResponse> list = roomService.listPrivate();
+
+        assertThat(list).hasSize(2);
+        assertThat(list).extracting(RoomResponse::id).containsExactly(5L, 4L);
+        assertThat(list).allMatch(RoomResponse::isPrivate);
+
+        verify(rooms, times(1)).findByIsPrivateTrueOrderByCreatedAtDesc();
+        verifyNoMoreInteractions(rooms);
+    }
+
+
+    @Test
+    void listPublic_empty_returnsEmptyList() {
+        when(rooms.findByIsPrivateFalseOrderByCreatedAtDesc()).thenReturn(List.of());
+
+        List<RoomResponse> list = roomService.listPublic();
+
+        assertThat(list).isEmpty();
+        verify(rooms).findByIsPrivateFalseOrderByCreatedAtDesc();
     }
 
 
