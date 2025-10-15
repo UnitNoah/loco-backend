@@ -12,6 +12,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/rooms")
 @RequiredArgsConstructor
@@ -20,14 +22,28 @@ import org.springframework.web.bind.annotation.*;
 public class RoomController {
     private final RoomService service;
 
-    @GetMapping("/{id}")
+    @GetMapping("/{roomId}")
     @Operation(summary = "방 상세 조회", description = "단건 방 상세를 조회합니다.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "성공")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "방 없음")
     public ApiResponse<RoomResponse> getRoom(
-            @Parameter(description = "방 ID", example = "1") @PathVariable Long id
+            @Parameter(description = "방 ID", example = "1") @PathVariable Long roomId
     ) {
-        return ApiResponse.success(service.getDetail(id));
+        return ApiResponse.success(service.getDetail(roomId));
+    }
+
+    @GetMapping("/public")
+    @Operation(summary = "공개방 목록 조회", description = "공개방을 최신순으로 반환합니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "성공")
+    public ApiResponse<List<RoomResponse>> listPublicRooms() {
+        return ApiResponse.success(service.listPublic());
+    }
+
+    @GetMapping("/private")
+    @Operation(summary = "비공개방 목록 조회", description = "비공개방을 최신순으로 반환합니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "성공")
+    public ApiResponse<List<RoomResponse>> listPrivateRooms() {
+        return ApiResponse.success(service.listPrivate());
     }
 
     @PostMapping
