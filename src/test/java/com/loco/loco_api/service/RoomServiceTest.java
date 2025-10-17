@@ -1,8 +1,10 @@
 package com.loco.loco_api.service;
 
 import com.loco.loco_api.common.dto.room.request.RoomCreateRequest;
+import com.loco.loco_api.common.dto.room.request.RoomUpdateRequest;
 import com.loco.loco_api.common.dto.room.response.RoomResponse;
 import com.loco.loco_api.common.exception.CustomException;
+import com.loco.loco_api.common.exception.ErrorCode;
 import com.loco.loco_api.domain.room.Room;
 import com.loco.loco_api.domain.user.UserEntity;
 import com.loco.loco_api.repository.RoomRepository;
@@ -148,5 +150,91 @@ class RoomServiceTest {
         assertThatThrownBy(() -> roomService.create(req, 9999L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Host user not found");
+    }
+
+    // 방 수정
+    private Room roomWithHost(long roomId, long hostId) {
+        var host = UserEntity.builder().id(hostId).nickname("host").provider("google").oauthId("x").build();
+
+        return Room.builder()
+                .id(roomId)
+                .name("old")
+                .description("old desc")
+                .isPrivate(true)
+                .inviteCode("CODE")
+                .thumbnail("old.png")
+                .host(host)
+                .build();
+    }
+    @Test
+    void update_success_hostOnly() {
+        var room = roomWithHost(1L, 42L);
+        when(rooms.findById(1L)).thenReturn(Optional.of(room));
+
+        var req = new RoomUpdateRequest("new", "new desc", false, "new.png");
+        RoomResponse resp = roomService.update(1L, 42L, req);
+
+        assertThat(resp.name()).isEqualTo("new");
+        assertThat(resp.description()).isEqualTo("new desc");
+        assertThat(resp.isPrivate()).isFalse();
+        assertThat(resp.thumbnail()).isEqualTo("new.png");
+    }
+
+    @Test
+    void update_forbidden_whenNotHost() {
+        var room = roomWithHost(1L, 42L);
+        when(rooms.findById(1L)).thenReturn(Optional.of(room));
+
+        var req = new RoomUpdateRequest("new", null, null, null);
+
+        assertThatThrownBy(() -> roomService.update(1L, 77L, req))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.ROOM_NOT_HOST);
+    }
+
+    @Test
+    void update_notFound() {
+        when(rooms.findById(999L)).thenReturn(Optional.empty());
+        var req = new RoomUpdateRequest("x", null, null, null);
+
+        assertThatThrownBy(() -> roomService.update(999L, 42L, req))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.ROOM_NOT_FOUND);
+    }
+
+    // 방 삭제
+    @Test
+    void delete_success_hostOnly() {
+        var room = roomWithHost(1L, 42L);
+        when(rooms.findById(1L)).thenReturn(Optional.of(room));
+
+        roomService.delete(1L, 42L);
+
+        verify(rooms).delete(room);
+    }
+
+    @Test
+    void delete_forbidden_whenNotHost() {
+        var room = roomWithHost(1L, 42L);
+        when(rooms.findById(1L)).thenReturn(Optional.of(room));
+
+        assertThatThrownBy(() -> roomService.delete(1L, 77L))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.ROOM_NOT_HOST);
+
+        verify(rooms, never()).delete(any());
+    }
+
+    @Test
+    void delete_notFound() {
+        when(rooms.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> roomService.delete(999L, 42L))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.ROOM_NOT_FOUND);
     }
 }/**/

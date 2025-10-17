@@ -2,6 +2,7 @@ package com.loco.loco_api.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.loco.loco_api.common.dto.room.request.RoomCreateRequest;
+import com.loco.loco_api.common.dto.room.request.RoomUpdateRequest;
 import com.loco.loco_api.common.dto.room.response.RoomResponse;
 import com.loco.loco_api.common.exception.CustomException;
 import com.loco.loco_api.common.exception.ErrorCode;
@@ -18,11 +19,11 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -145,5 +146,89 @@ class RoomControllerTest {
                         .param("hostId", "42")
                         .content(objectMapper.writeValueAsString(invalid)))
                 .andExpect(status().isBadRequest());
+    }
+
+    // 방 수정
+
+    @Test
+    void update_success_returns200WithBody() throws Exception {
+        var req = new RoomUpdateRequest("새이름", "새설명", false, "https://cdn.new/img.png");
+        var resp = new RoomResponse(1L, "새이름", "새설명", false, "https://cdn.new/img.png", 42L, "ABC1234");
+
+        when(roomService.update(eq(1L), eq(42L), any(RoomUpdateRequest.class))).thenReturn(resp);
+
+        mvc.perform(patch("/api/v1/rooms/{roomId}", 1L)
+                    .with(user("tester").roles("USER"))
+                    .with(csrf())
+                    .param("requesterId", "42")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.id").value(1))
+                .andExpect(jsonPath("$.data.name").value("새이름"))
+                .andExpect(jsonPath("$.data.is_private").value(false))
+                .andExpect(jsonPath("$.data.thumbnail").value("https://cdn.new/img.png"));
+    }
+
+    @Test
+    void update_forbidden_returns403() throws Exception {
+        var req = new RoomUpdateRequest("x", null, null, null);
+        when(roomService.update(eq(1L), eq(77L), any(RoomUpdateRequest.class)))
+                .thenThrow(new CustomException(ErrorCode.ROOM_NOT_HOST));
+
+        mvc.perform(patch("/api/v1/rooms/{roomId}", 1L)
+                    .with(user("tester").roles("USER"))
+                    .with(csrf())
+                    .param("requesterId", "77")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void update_notFound_returns404() throws Exception {
+        var req = new RoomUpdateRequest("room", "desc", null, null);
+        when(roomService.update(eq(999L), eq(42L), any(RoomUpdateRequest.class)))
+                .thenThrow(new CustomException(ErrorCode.ROOM_NOT_FOUND));
+        mvc.perform(patch("/api/v1/rooms/{roomId}", 999L)
+                    .with(user("tester").roles("USER"))
+                    .with(csrf())
+                    .param("requesterId", "42")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void delete_success_returns204() throws Exception {
+        mvc.perform(delete("/api/v1/rooms/{roomId}", 1L)
+                    .with(user("tester").roles("USER"))
+                    .with(csrf())
+                    .param("requesterId", "42"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void delete_forbidden_returns403() throws Exception {
+        doThrow(new CustomException(ErrorCode.ROOM_NOT_HOST)).when(roomService).delete(1L, 77L);
+
+        mvc.perform(delete("/api/v1/rooms/{roomId}", 1L)
+                    .with(user("tester").roles("USER"))
+                    .with(csrf())
+                    .param("requesterId", "77"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void delete_notFound_returns404() throws Exception {
+        doThrow(new CustomException(ErrorCode.ROOM_NOT_FOUND))
+                .when(roomService).delete(999L, 42L);
+
+        mvc.perform(delete("/api/v1/rooms/{roomId}", 999L)
+                    .with(user("tester").roles("USER"))
+                    .with(csrf())
+                    .param("requesterId", "42"))
+                .andExpect(status().isNotFound());
     }
 }
