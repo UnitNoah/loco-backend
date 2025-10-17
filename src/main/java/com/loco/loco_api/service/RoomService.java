@@ -1,6 +1,7 @@
 package com.loco.loco_api.service;
 
 import com.loco.loco_api.common.dto.room.request.RoomCreateRequest;
+import com.loco.loco_api.common.dto.room.request.RoomUpdateRequest;
 import com.loco.loco_api.common.dto.room.response.RoomResponse;
 import com.loco.loco_api.common.exception.CustomException;
 import com.loco.loco_api.common.exception.ErrorCode;
@@ -79,5 +80,43 @@ public class RoomService {
         return sb.toString();
     }
 
+    // 방 정보 수정
+    @Transactional
+    public RoomResponse update(Long roomId, Long requesterId, RoomUpdateRequest req) {
+        Room room = rooms.findById(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
 
+        // 권한 체크: 호스트만
+        if (!room.getHost().getId().equals(requesterId)) {
+            throw new CustomException(ErrorCode.ROOM_NOT_HOST);
+        }
+
+        // 부분 업데이트
+        if (req.name() != null && !req.name().isBlank()) {
+            room.setName(req.name());
+        }
+        if (req.name() != null) {
+            room.setDescription(req.description());
+        }
+        if (req.isPrivate() != null) {
+            room.setPrivate(req.isPrivate());
+        }
+        if (req.thumbnail() != null) {
+            room.setThumbnail(req.thumbnail());
+        }
+
+        Room saved = rooms.save(room);
+
+        return RoomResponse.from(room);
+    }
+
+    @Transactional
+    public void delete(Long roomId, Long requesterId) {
+        Room room = rooms.findById(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+
+        if (!room.getHost().getId().equals(requesterId)) {
+            throw new CustomException(ErrorCode.ROOM_NOT_HOST);
+        }
+
+        rooms.delete(room);
+    }
 }

@@ -1,6 +1,7 @@
 package com.loco.loco_api.controller;
 
 import com.loco.loco_api.common.dto.room.request.RoomCreateRequest;
+import com.loco.loco_api.common.dto.room.request.RoomUpdateRequest;
 import com.loco.loco_api.common.dto.room.response.RoomResponse;
 import com.loco.loco_api.common.response.ApiResponse;
 import com.loco.loco_api.service.RoomService;
@@ -10,6 +11,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -54,5 +56,25 @@ public class RoomController {
             @Valid @RequestBody RoomCreateRequest req
     ){
         return ApiResponse.success(service.create(req, hostId));
+    }
+
+    @PatchMapping("/{roomId}")
+    @Operation(summary = "방 정보 수정", description = "방 정보를 부분 수정합니다.")
+    public ApiResponse<RoomResponse> updateRoom(
+            @Parameter(description = "방 ID", example = "1") @PathVariable Long roomId,
+            @Parameter(description = "요청자 ID", example = "42") @RequestParam Long requesterId,
+            @Valid @RequestBody RoomUpdateRequest req
+    ) {
+        return ApiResponse.success(service.update(roomId, requesterId, req));
+    }
+
+    @DeleteMapping("/{roomId}")
+    @Operation(summary = "방 삭제", description = "해당 방을 삭제합니다.")
+    public ResponseEntity<Void> deleteRoom(
+            @Parameter(description = "방 ID", example = "1") @PathVariable Long roomId,
+            @Parameter(description = "요청자 ID", example = "42") @RequestParam Long requesterId
+    ) {
+        service.delete(roomId, requesterId);
+        return ResponseEntity.noContent().build();
     }
 }
