@@ -6,7 +6,9 @@ import com.loco.loco_api.common.dto.room.response.RoomResponse;
 import com.loco.loco_api.common.exception.CustomException;
 import com.loco.loco_api.common.exception.ErrorCode;
 import com.loco.loco_api.domain.room.Room;
+import com.loco.loco_api.domain.room.RoomParticipant;
 import com.loco.loco_api.domain.user.UserEntity;
+import com.loco.loco_api.repository.RoomParticipantRepository;
 import com.loco.loco_api.repository.RoomRepository;
 import com.loco.loco_api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
-import java.util.List;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +27,7 @@ public class RoomService {
 
     private final RoomRepository rooms;
     private final UserRepository users;
+    private final RoomParticipantRepository participants;
     private final SecureRandom random = new SecureRandom();
     private static final String ALPHANUM = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no confusing chars
 
@@ -118,5 +123,76 @@ public class RoomService {
         }
 
         rooms.delete(room);
+    }
+
+    // 사용자가 속한 방 (호스트 방 + 참가 방) -> createdAt DESC 정렬
+    public List<RoomResponse> listMy(Long userId) {
+        users.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        List<Room> hostRooms = rooms.findByHost_IdOrderByCreatedAtDesc(userId);
+        List<RoomParticipant> joined = participants.findByUserEntity_Id(userId);
+
+        // 중복 제거: 호스트 방 우선 포함 후, 참가방 중 겹치지 않는 것만 추가
+        Set<Long> seen = hostRooms.stream().map(Room::getId).collect(Collectors.toCollection(LinkedHashSet::new));
+        List<Room> all = new ArrayList<>(hostRooms);
+        for (RoomParticipant rp : joined) {
+            Room r = rp.getRoom();
+            if (r != null && seen.add(r.getId())) {
+                all.add(r);
+            }
+        }
+
+        // 정렬 기준: 방의 createdAt DESC
+        all.sort(Comparator.comparing(Room::getCreatedAt).reversed());
+
+        return all.stream().map(RoomResponse::from).toList();
+    }
+
+    // 방 참여
+    @Transactional
+    public void join(Long roomId, Long userId, String inviteCode) {
+        Room room = rooms.findById(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+        users.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        // 호스트는 이미 구성원으로 간주
+        if (room.getHost() != null && room.getHost().getId().equals(userId)) {
+            return;
+        }
+
+        // 이미 참가한 유저면 에러
+        if (participants.existsByRoom_IdAndUserEntity_Id(roomId, userId)) {
+            throw new CustomException(ErrorCode.ROOM_ALREADY_JOINED);
+        }
+
+        // 비공개인 경우 초대코드 필요
+        if (room.isPrivate()) {
+            boolean codeOk = room.getInviteCode() != null && room.getInviteCode().equals(inviteCode);
+            if (!codeOk) throw new CustomException(ErrorCode.ROOM_INVALID_INVITE_CODE);
+        }
+
+        RoomParticipant rp = RoomParticipant.builder()
+                .room(room)
+                .userEntity(users.getReferenceById(userId))
+                .joinedAt(LocalDateTime.now())
+                .build();
+
+        participants.save(rp);
+    }
+
+    // 방 나가기 (호스트는 떠날 수 없음)
+    @Transactional
+    public void leave(Long roomId, Long userId) {
+        Room room = rooms.findById(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+        users.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        // 호스트는 나가기 금지
+        if (room.getHost() != null && room.getHost().getId().equals(userId)) {
+            throw new CustomException(ErrorCode.ROOM_HOST_CANNOT_LEAVE);
+        }
+
+        RoomParticipant rp = participants.findByRoom_IdAndUserEntity_Id(roomId, userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.ROOM_PARTICIPANT_NOT_FOUND));
+
+        participants.delete(rp);
     }
 }
