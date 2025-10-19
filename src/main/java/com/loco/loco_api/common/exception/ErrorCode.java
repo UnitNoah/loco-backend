@@ -47,7 +47,10 @@ public enum ErrorCode {
   ROOM_IS_PRIVATE(HttpStatus.BAD_REQUEST, 4000, "비공개 방은 링크를 통해서만 접근할 수 있습니다."),
   ROOM_NOT_HOST(HttpStatus.FORBIDDEN, 4003, "해당 작업은 작성자 또는 방장만 수행할 수 있습니다."),
   ROOM_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, 4004, "방 참여자 정보를 찾을 수 없습니다."),
-
+  ROOM_ALREADY_JOINED(HttpStatus.FORBIDDEN, 4003, "방에 이미 참가중입니다."),
+  ROOM_INVALID_INVITE_CODE(HttpStatus.BAD_REQUEST, 4003, "유효하지 않은 참여 코드입니다."),
+  ROOM_PARTICIPANT_NOT_FOUND(HttpStatus.NOT_FOUND, 4004, "방에 참여하지 않은 사용자입니다."),
+  ROOM_HOST_CANNOT_LEAVE(HttpStatus.FORBIDDEN, 4003, "호스트는 방에서 나갈 수 없습니다."),
   // 위치
   LOCATION_NOT_FOUND(HttpStatus.NOT_FOUND, 4004, "위치 정보를 찾을 수 없습니다."),
   LOCATION_ACCESS_DENIED(HttpStatus.FORBIDDEN, 4003, "해당 위치에 대한 권한이 없습니다."),

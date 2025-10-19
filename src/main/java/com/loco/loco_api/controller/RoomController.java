@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -76,5 +77,32 @@ public class RoomController {
     ) {
         service.delete(roomId, requesterId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/my")
+    @Operation(summary = "내가 속한 방 목록", description = "호스트 방 + 내가 참여한 방의 합집합")
+    public ApiResponse<List<RoomResponse>> myRooms(@RequestParam Long userId) {
+        return ApiResponse.success(service.listMy(userId));
+    }
+
+    @PostMapping("/{roomId}/join")
+    @Operation(summary = "방 참여", description = "비공개방은 초대코드 필요.")
+    public ApiResponse<Void> join(
+            @PathVariable Long roomId,
+            @RequestParam Long userId,
+            @RequestParam(required = false) String inviteCode
+    ) {
+        service.join(roomId, userId, inviteCode);
+        return ApiResponse.success(null);
+    }
+
+    @PostMapping("/{roomId}/leave")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "방 나가기", description = "호스트는 나갈 수 없음")
+    public void leave(
+            @PathVariable Long roomId,
+            @RequestParam Long userId
+    ) {
+        service.leave(roomId, userId);
     }
 }

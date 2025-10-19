@@ -149,7 +149,6 @@ class RoomControllerTest {
     }
 
     // 방 수정
-
     @Test
     void update_success_returns200WithBody() throws Exception {
         var req = new RoomUpdateRequest("새이름", "새설명", false, "https://cdn.new/img.png");
@@ -200,6 +199,7 @@ class RoomControllerTest {
                 .andExpect(status().isNotFound());
     }
 
+    // 방 삭제
     @Test
     void delete_success_returns204() throws Exception {
         mvc.perform(delete("/api/v1/rooms/{roomId}", 1L)
