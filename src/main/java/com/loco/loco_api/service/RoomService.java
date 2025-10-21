@@ -33,7 +33,7 @@ public class RoomService {
 
     // 방 상세 조회
     public RoomResponse getDetail(Long roomId) {
-        Room room = rooms.findById(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+        Room room = rooms.findByIdAndDeletedAtIsNull(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
         return RoomResponse.from(room);
     }
 
@@ -88,7 +88,7 @@ public class RoomService {
     // 방 정보 수정
     @Transactional
     public RoomResponse update(Long roomId, Long requesterId, RoomUpdateRequest req) {
-        Room room = rooms.findById(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+        Room room = rooms.findByIdAndDeletedAtIsNull(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
 
         // 권한 체크: 호스트만
         if (!room.getHost().getId().equals(requesterId)) {
@@ -116,7 +116,7 @@ public class RoomService {
 
     @Transactional
     public void delete(Long roomId, Long requesterId) {
-        Room room = rooms.findById(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+        Room room = rooms.findByIdAndDeletedAtIsNull(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
 
         if (!room.getHost().getId().equals(requesterId)) {
             throw new CustomException(ErrorCode.ROOM_NOT_HOST);
@@ -151,7 +151,7 @@ public class RoomService {
     // 방 참여
     @Transactional
     public void join(Long roomId, Long userId, String inviteCode) {
-        Room room = rooms.findById(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+        Room room = rooms.findByIdAndDeletedAtIsNull(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
         users.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         // 호스트는 이미 구성원으로 간주
