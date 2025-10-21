@@ -77,7 +77,7 @@ public class RoomServiceMembershipTest {
     void join_public_success() {
         long me = 1L;
         Room r = room(100L, 2L, false);
-        when(rooms.findById(100L)).thenReturn(Optional.of(r));
+        when(rooms.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(r));
         when(users.findById(me)).thenReturn(Optional.of(user(me)));
         when(participants.existsByRoom_IdAndUserEntity_Id(100L, me)).thenReturn(false);
 
@@ -86,12 +86,13 @@ public class RoomServiceMembershipTest {
         verify(participants).save(any(RoomParticipant.class));
     }
 
+
     @Test
     void join_private_requiresInvite() {
         long me = 1L;
         Room r = room(100L, 2L, true);
         r.setInviteCode("OKCODE");
-        when(rooms.findById(100L)).thenReturn(Optional.of(r));
+        when(rooms.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(r));
         when(users.findById(me)).thenReturn(Optional.of(user(me)));
         when(participants.existsByRoom_IdAndUserEntity_Id(100L, me)).thenReturn(false);
 
