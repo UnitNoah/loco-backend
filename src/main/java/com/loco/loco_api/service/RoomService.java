@@ -17,8 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -121,31 +120,21 @@ public class RoomService {
         if (!room.getHost().getId().equals(requesterId)) {
             throw new CustomException(ErrorCode.ROOM_NOT_HOST);
         }
-
-        rooms.delete(room);
+        // SOFT DELETE: mark as deleted and persist
+        room.setDeletedAt(LocalDateTime.now());
+        rooms.save(room);
     }
 
-    // 사용자가 속한 방 (호스트 방 + 참가 방) -> createdAt DESC 정렬
-    public List<RoomResponse> listMy(Long userId) {
+    // 내가 호스트인 방 목록 (createdAt DESC, soft-delete 제외)
+    public List<RoomResponse> listHosted(Long userId) {
         users.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        return rooms.findByHost_IdAndDeletedAtIsNullOrderByCreatedAtDesc(userId).stream().map(RoomResponse::from).toList();
+    }
 
-        List<Room> hostRooms = rooms.findByHost_IdOrderByCreatedAtDesc(userId);
-        List<RoomParticipant> joined = participants.findByUserEntity_Id(userId);
-
-        // 중복 제거: 호스트 방 우선 포함 후, 참가방 중 겹치지 않는 것만 추가
-        Set<Long> seen = hostRooms.stream().map(Room::getId).collect(Collectors.toCollection(LinkedHashSet::new));
-        List<Room> all = new ArrayList<>(hostRooms);
-        for (RoomParticipant rp : joined) {
-            Room r = rp.getRoom();
-            if (r != null && seen.add(r.getId())) {
-                all.add(r);
-            }
-        }
-
-        // 정렬 기준: 방의 createdAt DESC
-        all.sort(Comparator.comparing(Room::getCreatedAt).reversed());
-
-        return all.stream().map(RoomResponse::from).toList();
+    // 내가 참여자인 방 목록
+    public List<RoomResponse> listJoined(Long userId) {
+        users.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        return participants.findByUserEntity_IdAndRoom_DeletedAtIsNullOrderByRoom_CreatedAtDesc(userId).stream().map(RoomParticipant::getRoom).map(RoomResponse::from).toList();
     }
 
     // 방 참여

@@ -211,7 +211,8 @@ class RoomServiceTest {
 
         roomService.delete(1L, 42L);
 
-        verify(rooms).delete(room);
+        verify(rooms, never()).delete(any());
+        assertThat(room.getDeletedAt()).isNotNull();
     }
 
     @Test

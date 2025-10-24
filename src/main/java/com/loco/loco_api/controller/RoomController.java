@@ -79,10 +79,16 @@ public class RoomController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/my")
-    @Operation(summary = "내가 속한 방 목록", description = "호스트 방 + 내가 참여한 방의 합집합")
-    public ApiResponse<List<RoomResponse>> myRooms(@RequestParam Long userId) {
-        return ApiResponse.success(service.listMy(userId));
+    @GetMapping("/hosted")
+    @Operation(summary = "내가 호스트인 방 목록", description = "요청자 ID가 호스트인 방들을 최신순으로 반환합니다.")
+    public ApiResponse<List<RoomResponse>> hostedRooms(@RequestParam Long userId) {
+        return ApiResponse.success(service.listHosted(userId));
+    }
+
+    @GetMapping("/joined")
+    @Operation(summary = "내가 참여한 방 목록", description = "요청자 ID가 참여자로 속한 방들을 최신순으로 반환합니다.")
+    public ApiResponse<List<RoomResponse>> joinedRooms(@RequestParam Long userId) {
+        return ApiResponse.success(service.listJoined(userId));
     }
 
     @PostMapping("/{roomId}/join")
