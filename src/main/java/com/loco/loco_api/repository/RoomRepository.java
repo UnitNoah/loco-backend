@@ -15,8 +15,8 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
     // 비공개방 최신순
     List<Room> findByIsPrivateTrueOrderByCreatedAtDesc();
 
-    // 호스트가 나인 방들 (내가 속한 방에 포함시키기 위함)
-    List<Room> findByHost_IdOrderByCreatedAtDesc(Long hostId);
+    // 호스트가 나인 방들
+    List<Room> findByHost_IdAndDeletedAtIsNullOrderByCreatedAtDesc(Long hostId);
 
     // 삭제된 방은 제외
     Optional<Room> findByIdAndDeletedAtIsNull(Long id);

@@ -53,24 +53,43 @@ public class RoomServiceMembershipTest {
     }
 
     @Test
-    void listMy_merges_hostAndJoined_sortsByCreatedAtDesc() {
+    void listHosted_returnsHostRooms_sortedByCreatedAtDesc() {
         long me = 1L;
         when(users.findById(me)).thenReturn(Optional.of(user(me)));
 
-        Room hostRoom = room(10L, me, false);
-        Room joinedRoom = room(20L, 99L, false);
+        Room room1 = room(10L, me, false);
+        Room room2 = room(20L, me, true);
 
-        hostRoom.setCreatedAt(LocalDateTime.now().minusDays(1));
-        joinedRoom.setCreatedAt(LocalDateTime.now());
+        room1.setCreatedAt(LocalDateTime.now().minusDays(1));
+        room2.setCreatedAt(LocalDateTime.now());
 
-        when(rooms.findByHost_IdOrderByCreatedAtDesc(me)).thenReturn(List.of(hostRoom));
-        when(participants.findByUserEntity_Id(me)).thenReturn(List.of(
-                RoomParticipant.builder().room(joinedRoom).build()
-        ));
+        when(rooms.findByHost_IdAndDeletedAtIsNullOrderByCreatedAtDesc(me)).thenReturn(List.of(room2, room1));
 
-        List<RoomResponse> out = service.listMy(me);
+        List<RoomResponse> out = service.listHosted(me);
 
         assertThat(out).extracting(RoomResponse::id).containsExactly(20L, 10L);
+    }
+
+    @Test
+    void listJoined_returnsJoinedRooms_sortedByCreatedAtDesc_andSkipsSoftDeleted() {
+        long me = 1L;
+        when(users.findById(me)).thenReturn(Optional.of(user(me)));
+
+        Room joinedNew = room(200L, 99L, false);
+        Room joinedOld = room(100L, 88L, true);
+
+        joinedNew.setCreatedAt(LocalDateTime.now());
+        joinedOld.setCreatedAt(LocalDateTime.now().minusDays(2));
+
+        when(participants.findByUserEntity_IdAndRoom_DeletedAtIsNullOrderByRoom_CreatedAtDesc(me))
+                .thenReturn(List.of(
+                        RoomParticipant.builder().room(joinedNew).build(),
+                        RoomParticipant.builder().room(joinedOld).build()
+                ));
+
+        List<RoomResponse> out = service.listJoined(me);
+
+        assertThat(out).extracting(RoomResponse::id).containsExactly(200L, 100L);
     }
 
     @Test
