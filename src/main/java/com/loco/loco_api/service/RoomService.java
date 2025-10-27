@@ -32,25 +32,25 @@ public class RoomService {
 
     // 방 상세 조회
     public RoomResponse getDetail(Long roomId) {
-        Room room = rooms.findByIdAndDeletedAtIsNull(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+        Room room = rooms.findActiveByIdFetchHost(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
         return RoomResponse.from(room);
     }
 
     // 공개방 목록
     public List<RoomResponse> listPublic() {
-        return rooms.findByIsPrivateFalseOrderByCreatedAtDesc().stream().map(RoomResponse::from).toList();
+        return rooms.findPublicOrderByCreatedAtDesc().stream().map(RoomResponse::from).toList();
     }
 
     // 비공개방 목록 (created
     public List<RoomResponse> listPrivate() {
-        return rooms.findByIsPrivateTrueOrderByCreatedAtDesc().stream().map(RoomResponse::from).toList();
+        return rooms.findPrivateOrderByCreatedAtDesc().stream().map(RoomResponse::from).toList();
     }
 
     // 방 생성
     @Transactional
     public RoomResponse create(RoomCreateRequest req, Long hostId) {
         UserEntity host = users.findById(hostId).orElseThrow(() -> new IllegalArgumentException("Host user not found: " + hostId));
-
+// TODO: Make this into constant
         String invite = generateUniqueInviteCode(8);
 
         Room room = Room.builder().name(req.name())
@@ -67,12 +67,9 @@ public class RoomService {
     }
 
     private String generateUniqueInviteCode(int len) {
-        String code;
         while (true) {
-            code = randomCode(len);
-            if (!rooms.existsByInviteCode(code)) {
-                return code;
-            }
+            String code = randomCode(len);
+            if (!rooms.existsByInviteCode(code)) return code;
         }
     }
 
@@ -87,7 +84,7 @@ public class RoomService {
     // 방 정보 수정
     @Transactional
     public RoomResponse update(Long roomId, Long requesterId, RoomUpdateRequest req) {
-        Room room = rooms.findByIdAndDeletedAtIsNull(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+        Room room = rooms.findActiveByIdFetchHost(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
 
         // 권한 체크: 호스트만
         if (!room.getHost().getId().equals(requesterId)) {
@@ -95,18 +92,10 @@ public class RoomService {
         }
 
         // 부분 업데이트
-        if (req.name() != null && !req.name().isBlank()) {
-            room.setName(req.name());
-        }
-        if (req.name() != null) {
-            room.setDescription(req.description());
-        }
-        if (req.isPrivate() != null) {
-            room.setPrivate(req.isPrivate());
-        }
-        if (req.thumbnail() != null) {
-            room.setThumbnail(req.thumbnail());
-        }
+        if (req.name() != null && !req.name().isBlank()) room.setName(req.name());
+        if (req.description() != null) room.setDescription(req.description());
+        if (req.isPrivate() != null) room.setPrivate(req.isPrivate());
+        if (req.thumbnail() != null) room.setThumbnail(req.thumbnail());
 
         Room saved = rooms.save(room);
 
@@ -114,42 +103,43 @@ public class RoomService {
     }
 
     @Transactional
-    public void delete(Long roomId, Long requesterId) {
-        Room room = rooms.findByIdAndDeletedAtIsNull(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+    public Long delete(Long roomId, Long requesterId) {
+        Room room = rooms.findActiveByIdFetchHost(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
 
         if (!room.getHost().getId().equals(requesterId)) {
             throw new CustomException(ErrorCode.ROOM_NOT_HOST);
         }
-        // SOFT DELETE: mark as deleted and persist
-        room.setDeletedAt(LocalDateTime.now());
-        rooms.save(room);
+
+        Long id = room.getId();
+        rooms.delete(room);
+        return room.getId();
     }
 
     // 내가 호스트인 방 목록 (createdAt DESC, soft-delete 제외)
     public List<RoomResponse> listHosted(Long userId) {
         users.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-        return rooms.findByHost_IdAndDeletedAtIsNullOrderByCreatedAtDesc(userId).stream().map(RoomResponse::from).toList();
+        return rooms.findHostBy(userId).stream().map(RoomResponse::from).toList();
     }
 
     // 내가 참여자인 방 목록
     public List<RoomResponse> listJoined(Long userId) {
         users.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-        return participants.findByUserEntity_IdAndRoom_DeletedAtIsNullOrderByRoom_CreatedAtDesc(userId).stream().map(RoomParticipant::getRoom).map(RoomResponse::from).toList();
+        return participants.findJoinedRoomsBy(userId).stream().map(RoomResponse::from).toList();
     }
 
     // 방 참여
     @Transactional
-    public void join(Long roomId, Long userId, String inviteCode) {
-        Room room = rooms.findByIdAndDeletedAtIsNull(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+    public RoomResponse join(Long roomId, Long userId, String inviteCode) {
+        Room room = rooms.findActiveByIdFetchHost(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
         users.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         // 호스트는 이미 구성원으로 간주
         if (room.getHost() != null && room.getHost().getId().equals(userId)) {
-            return;
+            return RoomResponse.from(room);
         }
 
         // 이미 참가한 유저면 에러
-        if (participants.existsByRoom_IdAndUserEntity_Id(roomId, userId)) {
+        if (participants.existsMembership(roomId, userId)) {
             throw new CustomException(ErrorCode.ROOM_ALREADY_JOINED);
         }
 
@@ -166,12 +156,15 @@ public class RoomService {
                 .build();
 
         participants.save(rp);
+
+        return RoomResponse.from(room);
     }
 
-    // 방 나가기 (호스트는 떠날 수 없음)
+    // 방 나가기 (호스트는 금지)
     @Transactional
-    public void leave(Long roomId, Long userId) {
-        Room room = rooms.findById(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+    public RoomResponse leave(Long roomId, Long userId) {
+        // 삭제된 방에서의 leave는 허용하지 않음(일관성 유지)
+        Room room = rooms.findActiveByIdFetchHost(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
         users.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         // 호스트는 나가기 금지
@@ -179,9 +172,11 @@ public class RoomService {
             throw new CustomException(ErrorCode.ROOM_HOST_CANNOT_LEAVE);
         }
 
-        RoomParticipant rp = participants.findByRoom_IdAndUserEntity_Id(roomId, userId)
+        RoomParticipant rp = participants.findMembership(roomId, userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.ROOM_PARTICIPANT_NOT_FOUND));
 
         participants.delete(rp);
+
+        return RoomResponse.from(room);
     }
 }

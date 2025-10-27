@@ -14,6 +14,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.util.List;
 
@@ -34,18 +35,23 @@ class RoomControllerTest {
     JpaMetamodelMappingContext jpaMappingContext;
 
     @Autowired private MockMvc mvc;
-    @Autowired
-    ObjectMapper objectMapper;
+    @Autowired private ObjectMapper objectMapper;
     @MockBean private RoomService roomService;
 
-    // 방 상세 조회
+    private RequestPostProcessor auth() {
+        return user("tester").roles("USER");
+    }
+
+    // ---------- 단건 조회 ----------
     @Test
     void getRoom_returns200WithBody() throws Exception {
-        var resp = new RoomResponse(1L, "스터디룸", "조용한 곳", true,
-                "https://cdn.example.com/img.png", 42L, "ABCD1234");
+        var resp = new RoomResponse(
+                1L, "스터디룸", "조용한 곳", true,
+                "https://cdn.example.com/img.png", 42L, "ABCD1234"
+        );
         when(roomService.getDetail(1L)).thenReturn(resp);
 
-        mvc.perform(get("/api/v1/rooms/{roomId}", 1L).with(user("tester").roles("USER")))
+        mvc.perform(get("/api/v1/rooms/{roomId}", 1L).with(auth()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.id").value(1))
@@ -61,11 +67,11 @@ class RoomControllerTest {
     void getRoom_notFound_returns404() throws Exception {
         when(roomService.getDetail(999L)).thenThrow(new CustomException(ErrorCode.ROOM_NOT_FOUND));
 
-        mvc.perform(get("/api/v1/rooms/{roomId}", 999L).with(user("tester").roles("USER")))
+        mvc.perform(get("/api/v1/rooms/{roomId}", 999L).with(auth()))
                 .andExpect(status().isNotFound());
     }
 
-    // 공개방 목록
+    // ---------- 공개방 목록 ----------
     @Test
     void listPublic_returns200WithArray() throws Exception {
         var r1 = new RoomResponse(3L,"공개3","d",false,"t",10L,"C3");
@@ -73,7 +79,7 @@ class RoomControllerTest {
         var r3 = new RoomResponse(1L,"공개1","d",false,"t",10L,"C1");
         when(roomService.listPublic()).thenReturn(List.of(r1, r2, r3));
 
-        mvc.perform(get("/api/v1/rooms/public").with(user("tester").roles("USER")))
+        mvc.perform(get("/api/v1/rooms/public").with(auth()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.length()").value(3))
@@ -85,14 +91,25 @@ class RoomControllerTest {
                 .andExpect(jsonPath("$.data[2].id").value(1));
     }
 
-    // 비공개방 목록
+    @Test
+    void listPublic_empty_returnsEmptyArray() throws Exception {
+        when(roomService.listPublic()).thenReturn(List.of());
+
+        mvc.perform(get("/api/v1/rooms/public").with(auth()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data.length()").value(0));
+    }
+
+    // ---------- 비공개방 목록 ----------
     @Test
     void listPrivate_returns200WithArray() throws Exception {
         var r1 = new RoomResponse(5L,"비공개5","d",true,"t",10L,"X5");
         var r2 = new RoomResponse(4L,"비공개4","d",true,"t",10L,"X4");
         when(roomService.listPrivate()).thenReturn(List.of(r1, r2));
 
-        mvc.perform(get("/api/v1/rooms/private").with(user("tester").roles("USER")))
+        mvc.perform(get("/api/v1/rooms/private").with(auth()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.length()").value(2))
@@ -102,28 +119,15 @@ class RoomControllerTest {
                 .andExpect(jsonPath("$.data[1].id").value(4));
     }
 
-    @Test
-    void listPublic_empty_returnsEmptyArray() throws Exception {
-        when(roomService.listPublic()).thenReturn(List.of());
-
-        mvc.perform(get("/api/v1/rooms/public").with(user("tester").roles("USER")))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data").isArray())
-                .andExpect(jsonPath("$.data.length()").value(0));
-    }
-
-
-    // 방 생성
+    // ---------- 생성 ----------
     @Test
     void createRoom_returns200WithBody() throws Exception {
         var req  = new RoomCreateRequest("스터디룸","조용한 곳", true, "https://cdn.example.com/img.png");
         var resp = new RoomResponse(1L, "스터디룸", "조용한 곳", true, "https://cdn.example.com/img.png", 42L, "ABCD1234" );
         when(roomService.create(any(), eq(42L))).thenReturn(resp);
 
-
         mvc.perform(post("/api/v1/rooms")
-                        .with(user("tester").roles("USER"))
+                        .with(auth())
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .param("hostId", "42")
@@ -134,13 +138,12 @@ class RoomControllerTest {
                 .andExpect(jsonPath("$.data.invite_code").isNotEmpty());
     }
 
-
     @Test
     void createRoom_validationError_returns400() throws Exception {
         var invalid = new RoomCreateRequest("", "x", true, null);
 
         mvc.perform(post("/api/v1/rooms")
-                        .with(user("tester").roles("USER"))
+                        .with(auth())
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .param("hostId", "42")
@@ -148,7 +151,7 @@ class RoomControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
-    // 방 수정
+    // ---------- 수정 ----------
     @Test
     void update_success_returns200WithBody() throws Exception {
         var req = new RoomUpdateRequest("새이름", "새설명", false, "https://cdn.new/img.png");
@@ -157,11 +160,11 @@ class RoomControllerTest {
         when(roomService.update(eq(1L), eq(42L), any(RoomUpdateRequest.class))).thenReturn(resp);
 
         mvc.perform(patch("/api/v1/rooms/{roomId}", 1L)
-                    .with(user("tester").roles("USER"))
-                    .with(csrf())
-                    .param("requesterId", "42")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(req)))
+                        .with(auth())
+                        .with(csrf())
+                        .param("requesterId", "42")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.id").value(1))
@@ -177,11 +180,11 @@ class RoomControllerTest {
                 .thenThrow(new CustomException(ErrorCode.ROOM_NOT_HOST));
 
         mvc.perform(patch("/api/v1/rooms/{roomId}", 1L)
-                    .with(user("tester").roles("USER"))
-                    .with(csrf())
-                    .param("requesterId", "77")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(req)))
+                        .with(auth())
+                        .with(csrf())
+                        .param("requesterId", "77")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isForbidden());
     }
 
@@ -190,23 +193,26 @@ class RoomControllerTest {
         var req = new RoomUpdateRequest("room", "desc", null, null);
         when(roomService.update(eq(999L), eq(42L), any(RoomUpdateRequest.class)))
                 .thenThrow(new CustomException(ErrorCode.ROOM_NOT_FOUND));
+
         mvc.perform(patch("/api/v1/rooms/{roomId}", 999L)
-                    .with(user("tester").roles("USER"))
-                    .with(csrf())
-                    .param("requesterId", "42")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(req)))
+                        .with(auth())
+                        .with(csrf())
+                        .param("requesterId", "42")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isNotFound());
     }
 
-    // 방 삭제
+    // ---------- 삭제 ----------
     @Test
-    void delete_success_returns204() throws Exception {
+    void delete_success_returns200WithSuccessEnvelope() throws Exception {
         mvc.perform(delete("/api/v1/rooms/{roomId}", 1L)
-                    .with(user("tester").roles("USER"))
-                    .with(csrf())
-                    .param("requesterId", "42"))
-                .andExpect(status().isNoContent());
+                        .with(auth())
+                        .with(csrf())
+                        .param("requesterId", "42"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data").value(0));
     }
 
     @Test
@@ -214,21 +220,20 @@ class RoomControllerTest {
         doThrow(new CustomException(ErrorCode.ROOM_NOT_HOST)).when(roomService).delete(1L, 77L);
 
         mvc.perform(delete("/api/v1/rooms/{roomId}", 1L)
-                    .with(user("tester").roles("USER"))
-                    .with(csrf())
-                    .param("requesterId", "77"))
+                        .with(auth())
+                        .with(csrf())
+                        .param("requesterId", "77"))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     void delete_notFound_returns404() throws Exception {
-        doThrow(new CustomException(ErrorCode.ROOM_NOT_FOUND))
-                .when(roomService).delete(999L, 42L);
+        doThrow(new CustomException(ErrorCode.ROOM_NOT_FOUND)).when(roomService).delete(999L, 42L);
 
         mvc.perform(delete("/api/v1/rooms/{roomId}", 999L)
-                    .with(user("tester").roles("USER"))
-                    .with(csrf())
-                    .param("requesterId", "42"))
+                        .with(auth())
+                        .with(csrf())
+                        .param("requesterId", "42"))
                 .andExpect(status().isNotFound());
     }
 }

@@ -12,6 +12,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.util.List;
 
@@ -25,26 +26,27 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-
 @WebMvcTest(RoomController.class)
 public class RoomControllerMembershipTest {
+
     @MockBean(name = "jpaMappingContext")
     JpaMetamodelMappingContext jpaMappingContext;
 
-    @Autowired
-    MockMvc mvc;
-    @Autowired
-    ObjectMapper objectMapper;
-    @MockBean
-    RoomService roomService;
+    @Autowired MockMvc mvc;
+    @Autowired ObjectMapper objectMapper;
+    @MockBean RoomService roomService;
+
+    private RequestPostProcessor auth() {
+        return user("tester").roles("USER");
+    }
 
     @Test
     void hostedRooms_ok() throws Exception {
         var room1 = new RoomResponse(10L, "A", "d", false, null, 1L, "X");
-        var room2 = new RoomResponse(11L, "B", "d", true, null, 1L, "Y");
+        var room2 = new RoomResponse(11L, "B", "d", true,  null, 1L, "Y");
         when(roomService.listHosted(1L)).thenReturn(List.of(room2, room1));
 
-        mvc.perform(get("/api/v1/rooms/hosted").with(user("tester").roles("USER")).param("userId", "1"))
+        mvc.perform(get("/api/v1/rooms/hosted").with(auth()).param("userId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data[0].id").value(11))
@@ -54,10 +56,10 @@ public class RoomControllerMembershipTest {
     @Test
     void joinedRooms_ok() throws Exception {
         var room1 = new RoomResponse(20L, "J1", "d", false, null, 99L, "X");
-        var room2 = new RoomResponse(30L, "32", "d", true, null, 77L, "Y");
+        var room2 = new RoomResponse(30L, "J2", "d", true,  null, 77L, "Y");
         when(roomService.listJoined(1L)).thenReturn(List.of(room2, room1));
 
-        mvc.perform(get("/api/v1/rooms/joined").with(user("tester").roles("USER")).param("userId", "1"))
+        mvc.perform(get("/api/v1/rooms/joined").with(auth()).param("userId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data[0].id").value(30))
@@ -67,7 +69,7 @@ public class RoomControllerMembershipTest {
     @Test
     void join_public_ok() throws Exception {
         mvc.perform(post("/api/v1/rooms/{roomId}/join", 100L)
-                        .with(user("tester").roles("USER"))
+                        .with(auth())
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .param("userId", "1"))
@@ -81,20 +83,21 @@ public class RoomControllerMembershipTest {
                 .when(roomService).join(eq(100L), eq(1L), eq("BAD"));
 
         mvc.perform(post("/api/v1/rooms/{roomId}/join", 100L)
-                        .with(user("tester").roles("USER"))
+                        .with(auth())
                         .with(csrf())
-                        .param("userId","1")
-                        .param("inviteCode","BAD"))
+                        .param("userId", "1")
+                        .param("inviteCode", "BAD"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    void leave_noContent() throws Exception {
+    void leave_success_returns200Envelope() throws Exception {
         mvc.perform(post("/api/v1/rooms/{roomId}/leave", 100L)
-                        .with(user("tester").roles("USER"))
+                        .with(auth())
                         .with(csrf())
-                        .param("userId","1"))
-                .andExpect(status().isNoContent());
+                        .param("userId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"));
     }
 
     @Test
@@ -103,9 +106,9 @@ public class RoomControllerMembershipTest {
                 .when(roomService).leave(100L, 1L);
 
         mvc.perform(post("/api/v1/rooms/{roomId}/leave", 100L)
-                        .with(user("tester").roles("USER"))
+                        .with(auth())
                         .with(csrf())
-                        .param("userId","1"))
+                        .param("userId", "1"))
                 .andExpect(status().isForbidden());
     }
 }

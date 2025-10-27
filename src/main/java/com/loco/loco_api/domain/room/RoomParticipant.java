@@ -3,6 +3,8 @@ package com.loco.loco_api.domain.room;
 import com.loco.loco_api.domain.user.UserEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 
 import java.time.LocalDateTime;
 
@@ -15,6 +17,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
+@SQLDelete(sql = "UPDATE room_participants SET deleted_at = NOW() WHERE id = ?")
+@Where(clause = "deleted_at IS NULL")
 public class RoomParticipant {
 
   @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -29,5 +33,13 @@ public class RoomParticipant {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "user_id")
   private UserEntity userEntity;
+
+  @Column(name = "deleted_at")
+  private LocalDateTime deletedAt;
+
+  public void restore() {
+      this.deletedAt = null;
+      this.joinedAt = LocalDateTime.now();
+  }
 }
 
