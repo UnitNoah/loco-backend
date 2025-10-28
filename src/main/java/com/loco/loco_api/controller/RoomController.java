@@ -83,7 +83,6 @@ public class RoomController {
             @Parameter(description = "방 ID", example = "1") @PathVariable Long roomId,
             @Parameter(description = "요청자 ID", example = "42") @RequestParam Long requesterId
     ) {
-        service.delete(roomId, requesterId);
         return ApiResponse.success(service.delete(roomId, requesterId));
     }
 
@@ -106,7 +105,6 @@ public class RoomController {
             @RequestParam Long userId,
             @RequestParam(required = false) String inviteCode
     ) {
-        service.join(roomId, userId, inviteCode);
         return ApiResponse.success(service.join(roomId, userId, inviteCode));
     }
 
@@ -116,7 +114,6 @@ public class RoomController {
             @PathVariable Long roomId,
             @RequestParam Long userId
     ) {
-        service.leave(roomId, userId);
         return ApiResponse.success(service.leave(roomId, userId));
     }
 }

@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -35,7 +37,7 @@ public class RoomService {
         Room room = rooms.findActiveByIdFetchHost(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
         if (room.isPrivate()) throw new CustomException(ErrorCode.ROOM_NOT_FOUND);
-        return RoomResponse.from(room);
+        return mapOneWithCount(room);
     }
 
     // 비공개방 상세 조회
@@ -43,18 +45,35 @@ public class RoomService {
         Room room = rooms.findActiveByIdFetchHost(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
         if (!room.isPrivate()) throw new CustomException(ErrorCode.ROOM_NOT_FOUND);
-        return RoomResponse.from(room);
+        return mapOneWithCount(room);
     }
 
     // 공개방 목록
     public List<RoomResponse> listPublic() {
-        return rooms.findPublicOrderByCreatedAtDesc().stream().map(RoomResponse::from).toList();
+        List<Room> list = rooms.findPublicOrderByCreatedAtDesc();
+        return mapWithCounts(list);
     }
 
     // 비공개방 목록 (created
     public List<RoomResponse> listPrivate() {
-        return rooms.findPrivateOrderByCreatedAtDesc().stream().map(RoomResponse::from).toList();
+        List<Room> list = rooms.findPrivateOrderByCreatedAtDesc();
+        return mapWithCounts(list);
     }
+
+    // 내가 호스트인 방 목록 (createdAt DESC, soft-delete 제외)
+    public List<RoomResponse> listHosted(Long userId) {
+        users.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        List<Room> list = rooms.findHostBy(userId);
+        return mapWithCounts(list);
+    }
+
+    // 내가 참여자인 방 목록
+    public List<RoomResponse> listJoined(Long userId) {
+        users.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        List<Room> list = participants.findJoinedRoomsBy(userId);
+        return mapWithCounts(list);
+    }
+
 
     // 방 생성
     @Transactional
@@ -73,22 +92,8 @@ public class RoomService {
 
         Room saved = rooms.save(room);
 
-        return RoomResponse.from(saved);
-    }
-
-    private String generateUniqueInviteCode(int len) {
-        while (true) {
-            String code = randomCode(len);
-            if (!rooms.existsByInviteCode(code)) return code;
-        }
-    }
-
-    private String randomCode(int len) {
-        StringBuilder sb = new StringBuilder(len);
-        for (int i = 0; i < len; i++) {
-            sb.append(ALPHANUM.charAt(random.nextInt(ALPHANUM.length())));
-        }
-        return sb.toString();
+        // 새로운 생성된 방은 memberCount = 1
+        return RoomResponse.from(saved, 1);
     }
 
     // 방 정보 수정
@@ -109,7 +114,7 @@ public class RoomService {
 
         Room saved = rooms.save(room);
 
-        return RoomResponse.from(room);
+        return mapOneWithCount(room);
     }
 
     @Transactional
@@ -125,18 +130,6 @@ public class RoomService {
         return room.getId();
     }
 
-    // 내가 호스트인 방 목록 (createdAt DESC, soft-delete 제외)
-    public List<RoomResponse> listHosted(Long userId) {
-        users.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-        return rooms.findHostBy(userId).stream().map(RoomResponse::from).toList();
-    }
-
-    // 내가 참여자인 방 목록
-    public List<RoomResponse> listJoined(Long userId) {
-        users.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-        return participants.findJoinedRoomsBy(userId).stream().map(RoomResponse::from).toList();
-    }
-
     // 방 참여
     @Transactional
     public RoomResponse join(Long roomId, Long userId, String inviteCode) {
@@ -145,7 +138,7 @@ public class RoomService {
 
         // 호스트는 이미 구성원으로 간주
         if (room.getHost() != null && room.getHost().getId().equals(userId)) {
-            return RoomResponse.from(room);
+            return mapOneWithCount(room);
         }
 
         // 이미 참가한 유저면 에러
@@ -167,7 +160,7 @@ public class RoomService {
 
         participants.save(rp);
 
-        return RoomResponse.from(room);
+        return mapOneWithCount(room);
     }
 
     // 방 나가기 (호스트는 금지)
@@ -187,6 +180,47 @@ public class RoomService {
 
         participants.delete(rp);
 
-        return RoomResponse.from(room);
+        return mapOneWithCount(room);
+    }
+
+    // ---------- helpers ----------
+    private Map<Long, Integer> memberCountsFor(List<Long> roomIds) {
+        if (roomIds.isEmpty()) return Map.of();
+        return participants.countActiveByRoomIds(roomIds).stream()
+                .collect(Collectors.toMap(
+                        RoomParticipantRepository.RoomMemberCount::getRoomId,
+                        r -> (int) r.getCnt()
+                ));
+    }
+
+    private List<RoomResponse> mapWithCounts(List<Room> roomList) {
+        List<Long> ids = roomList.stream().map(Room::getId).toList();
+        Map<Long, Integer> pCounts = memberCountsFor(ids); // participants only
+        return roomList.stream()
+                .map(r -> RoomResponse.from(
+                        r,
+                        pCounts.getOrDefault(r.getId(), 0) + 1 // +1 host
+                ))
+                .toList();
+    }
+
+    private RoomResponse mapOneWithCount(Room room) {
+        Map<Long, Integer> pCounts = memberCountsFor(List.of(room.getId()));
+        return RoomResponse.from(room, pCounts.getOrDefault(room.getId(), 0) + 1);
+    }
+
+    private String generateUniqueInviteCode(int len) {
+        while (true) {
+            String code = randomCode(len);
+            if (!rooms.existsByInviteCode(code)) return code;
+        }
+    }
+
+    private String randomCode(int len) {
+        StringBuilder sb = new StringBuilder(len);
+        for (int i = 0; i < len; i++) {
+            sb.append(ALPHANUM.charAt(random.nextInt(ALPHANUM.length())));
+        }
+        return sb.toString();
     }
 }

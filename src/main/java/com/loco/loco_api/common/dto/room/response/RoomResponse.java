@@ -13,9 +13,10 @@ public record RoomResponse(
     @Schema(description = "호스트 사용자 ID", example = "1") Long hostId,
     @Schema(description = "초대 코드", example = "aaaaa") String inviteCode,
     @Schema(description = "호스트 닉네임", example = "jin") String hostNickname,
-    @Schema(description = "호스트 프로필 이미지 URL", example = "https://cdn.example.com/users/u1.png") String hostProfileImageUrl
+    @Schema(description = "호스트 프로필 이미지 URL", example = "https://cdn.example.com/users/u1.png") String hostProfileImageUrl,
+    @Schema(description = "멤버 수(호스트 포함)", example = "5") Integer memberCount
     ){
-    public static RoomResponse from(Room room) {
+    public static RoomResponse from(Room room, Integer memberCount) {
         return new RoomResponse(
                 room.getId(),
                 room.getName(),
@@ -25,7 +26,8 @@ public record RoomResponse(
                 room.getHost().getId(),
                 room.getInviteCode(),
                 room.getHost().getNickname(),
-                room.getHost().getProfileImageUrl()
+                room.getHost().getProfileImageUrl(),
+                memberCount
         );
     }
 }

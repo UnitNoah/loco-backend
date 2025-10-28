@@ -4,6 +4,7 @@ import com.loco.loco_api.domain.room.Room;
 import com.loco.loco_api.domain.room.RoomParticipant;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -28,4 +29,15 @@ public interface RoomParticipantRepository extends JpaRepository<RoomParticipant
      */
     @Query("SELECT r FROM RoomParticipant rp LEFT JOIN rp.room r LEFT JOIN FETCH r.host h WHERE rp.userEntity.id = :userId AND r.deletedAt IS NULL AND rp.deletedAt IS NULL ORDER BY r.createdAt DESC")
     List<Room> findJoinedRoomsBy(Long userId);
+
+    /**
+     * 방에 참여한 멤버 카운트
+     */
+    @Query("SELECT rp.room.id as roomId, count(rp.id) as cnt FROM RoomParticipant rp WHERE rp.room.id IN :roomIds AND rp.deletedAt IS NULL GROUP BY rp.room.id")
+    List<RoomMemberCount> countActiveByRoomIds (@Param("roomIds") List<Long> roomIds);
+
+    interface RoomMemberCount {
+        Long getRoomId();
+        long getCnt();
+    }
 }

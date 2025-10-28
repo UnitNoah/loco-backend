@@ -29,9 +29,17 @@ class RoomServiceTest {
 
     @Mock private RoomRepository rooms;
     @Mock private UserRepository users;
-    @Mock private RoomParticipantRepository participants; // <-- needed by RoomService ctor
+    @Mock private RoomParticipantRepository participants;
 
     @InjectMocks private RoomService roomService;
+
+    // helper to build the projection objects for countActiveByRoomIds()
+    private RoomParticipantRepository.RoomMemberCount mc(Long roomId, long cnt) {
+        return new RoomParticipantRepository.RoomMemberCount() {
+            @Override public Long getRoomId() { return roomId; }
+            @Override public long getCnt() { return cnt; } // participants only
+        };
+    }
 
     // --- 상세 조회 (분리된 엔드포인트 대응) ---
 
@@ -52,6 +60,8 @@ class RoomServiceTest {
                 .build();
 
         when(rooms.findActiveByIdFetchHost(1L)).thenReturn(Optional.of(room));
+        // no participants; service should return memberCount = 1 (host only)
+        when(participants.countActiveByRoomIds(List.of(1L))).thenReturn(List.of());
 
         RoomResponse resp = roomService.getPublicDetail(1L);
 
@@ -62,6 +72,7 @@ class RoomServiceTest {
         assertThat(resp.thumbnail()).isEqualTo("https://cdn.example.com/img.png");
         assertThat(resp.hostId()).isEqualTo(42L);
         assertThat(resp.inviteCode()).isEqualTo("ABCD1234");
+        assertThat(resp.memberCount()).isEqualTo(1); // host only
     }
 
     @Test
@@ -93,12 +104,15 @@ class RoomServiceTest {
                 .build();
 
         when(rooms.findActiveByIdFetchHost(2L)).thenReturn(Optional.of(room));
+        // say there are 2 participants; final memberCount = 2 + 1 host = 3
+        when(participants.countActiveByRoomIds(List.of(2L))).thenReturn(List.of(mc(2L, 2)));
 
         RoomResponse resp = roomService.getPrivateDetail(2L);
 
         assertThat(resp.id()).isEqualTo(2L);
         assertThat(resp.isPrivate()).isTrue();
         assertThat(resp.hostId()).isEqualTo(42L);
+        assertThat(resp.memberCount()).isEqualTo(3);
     }
 
     @Test
@@ -133,10 +147,10 @@ class RoomServiceTest {
                 .isEqualTo(ErrorCode.ROOM_NOT_FOUND);
     }
 
-    // --- 공개/비공개 목록 ---
+    // --- 공개/비공개 목록 (batch memberCount) ---
 
     @Test
-    void listPublic_filtersAndMaps_inCreatedAtDescOrder() {
+    void listPublic_includesMemberCount_andCreatedAtDesc() {
         var host = UserEntity.builder().id(42L).nickname("홍길동").provider("google").oauthId("x").build();
 
         var r3 = Room.builder().id(3L).name("공개3").description("d").isPrivate(false).inviteCode("C3").thumbnail("t").host(host).build();
@@ -144,44 +158,53 @@ class RoomServiceTest {
         var r1 = Room.builder().id(1L).name("공개1").description("d").isPrivate(false).inviteCode("C1").thumbnail("t").host(host).build();
 
         when(rooms.findPublicOrderByCreatedAtDesc()).thenReturn(List.of(r3, r2, r1));
+        // participants only; service adds +1 for host → final [5,3,1]
+        when(participants.countActiveByRoomIds(List.of(3L, 2L, 1L)))
+                .thenReturn(List.of(mc(3L, 4), mc(2L, 2), mc(1L, 0)));
 
         List<RoomResponse> list = roomService.listPublic();
 
         assertThat(list).hasSize(3);
         assertThat(list).extracting(RoomResponse::id).containsExactly(3L, 2L, 1L);
-        assertThat(list).allMatch(rr -> !rr.isPrivate());
+        assertThat(list).extracting(RoomResponse::memberCount).containsExactly(5, 3, 1);
 
-        verify(rooms, times(1)).findPublicOrderByCreatedAtDesc();
-        verifyNoMoreInteractions(rooms);
+        verify(rooms).findPublicOrderByCreatedAtDesc();
+        verify(participants).countActiveByRoomIds(List.of(3L, 2L, 1L));
+        verifyNoMoreInteractions(rooms, participants);
     }
 
     @Test
-    void listPrivate_filtersAndMaps_inCreatedAtDescOrder() {
+    void listPrivate_includesMemberCount_andCreatedAtDesc() {
         var host = UserEntity.builder().id(7L).nickname("이몽룡").provider("google").oauthId("y").build();
 
         var r5 = Room.builder().id(5L).name("비공개5").description("d").isPrivate(true).inviteCode("X5").thumbnail("t").host(host).build();
         var r4 = Room.builder().id(4L).name("비공개4").description("d").isPrivate(true).inviteCode("X4").thumbnail("t").host(host).build();
 
         when(rooms.findPrivateOrderByCreatedAtDesc()).thenReturn(List.of(r5, r4));
+        // participants only; final will be [8,2]
+        when(participants.countActiveByRoomIds(List.of(5L, 4L)))
+                .thenReturn(List.of(mc(5L, 7), mc(4L, 1)));
 
         List<RoomResponse> list = roomService.listPrivate();
 
         assertThat(list).hasSize(2);
         assertThat(list).extracting(RoomResponse::id).containsExactly(5L, 4L);
-        assertThat(list).allMatch(RoomResponse::isPrivate);
+        assertThat(list).extracting(RoomResponse::memberCount).containsExactly(8, 2);
 
-        verify(rooms, times(1)).findPrivateOrderByCreatedAtDesc();
-        verifyNoMoreInteractions(rooms);
+        verify(rooms).findPrivateOrderByCreatedAtDesc();
+        verify(participants).countActiveByRoomIds(List.of(5L, 4L));
+        verifyNoMoreInteractions(rooms, participants);
     }
 
     @Test
-    void listPublic_empty_returnsEmptyList() {
+    void listPublic_empty_returnsEmptyList_andSkipsCountCall() {
         when(rooms.findPublicOrderByCreatedAtDesc()).thenReturn(List.of());
 
         List<RoomResponse> list = roomService.listPublic();
 
         assertThat(list).isEmpty();
         verify(rooms).findPublicOrderByCreatedAtDesc();
+        verifyNoInteractions(participants);
     }
 
     // --- 생성/수정/삭제 ---
@@ -198,6 +221,7 @@ class RoomServiceTest {
         RoomResponse resp = roomService.create(req, 42L);
 
         assertThat(resp.name()).isEqualTo("스터디룸");
+        assertThat(resp.memberCount()).isEqualTo(1); // host only on create
         verify(rooms).save(any());
     }
 
@@ -213,7 +237,6 @@ class RoomServiceTest {
 
     private Room roomWithHost(long roomId, long hostId) {
         var host = UserEntity.builder().id(hostId).nickname("host").provider("google").oauthId("x").build();
-
         return Room.builder()
                 .id(roomId)
                 .name("old")
@@ -230,6 +253,7 @@ class RoomServiceTest {
         var room = roomWithHost(1L, 42L);
         when(rooms.findActiveByIdFetchHost(1L)).thenReturn(Optional.of(room));
         when(rooms.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(participants.countActiveByRoomIds(List.of(1L))).thenReturn(List.of()); // 0 participants → 1 total
 
         var req = new RoomUpdateRequest("new", "new desc", false, "new.png");
         RoomResponse resp = roomService.update(1L, 42L, req);
@@ -238,6 +262,7 @@ class RoomServiceTest {
         assertThat(resp.description()).isEqualTo("new desc");
         assertThat(resp.isPrivate()).isFalse();
         assertThat(resp.thumbnail()).isEqualTo("new.png");
+        assertThat(resp.memberCount()).isEqualTo(1);
     }
 
     @Test

@@ -44,9 +44,10 @@ class RoomControllerTest {
     @Test
     void getPublicRoom_returns200WithBody() throws Exception {
         var resp = new RoomResponse(
-                1L, "스터디룸", "조용한 곳", true,
+                1L, "스터디룸", "조용한 곳", false,
                 "https://cdn.example.com/img.png", 42L, "ABCD1234",
-                "홍길동", "https://cdn.example.com/users/u42.png"
+                "홍길동", "https://cdn.example.com/users/u42.png",
+                5
         );
         when(roomService.getPublicDetail(1L)).thenReturn(resp);
 
@@ -56,12 +57,13 @@ class RoomControllerTest {
                 .andExpect(jsonPath("$.data.id").value(1))
                 .andExpect(jsonPath("$.data.name").value("스터디룸"))
                 .andExpect(jsonPath("$.data.description").value("조용한 곳"))
-                .andExpect(jsonPath("$.data.is_private").value(true))
+                .andExpect(jsonPath("$.data.is_private").value(false))
                 .andExpect(jsonPath("$.data.thumbnail").value("https://cdn.example.com/img.png"))
                 .andExpect(jsonPath("$.data.host_id").value(42))
                 .andExpect(jsonPath("$.data.invite_code").value("ABCD1234"))
                 .andExpect(jsonPath("$.data.host_nickname").value("홍길동"))
-                .andExpect(jsonPath("$.data.host_profile_image_url").value("https://cdn.example.com/users/u42.png"));
+                .andExpect(jsonPath("$.data.host_profile_image_url").value("https://cdn.example.com/users/u42.png"))
+                .andExpect(jsonPath("$.data.member_count").value(5));
     }
 
     @Test
@@ -78,7 +80,8 @@ class RoomControllerTest {
         var resp = new RoomResponse(
                 2L, "비밀방", "설명", true,
                 "https://cdn.example.com/secret.png", 77L, "SECR3T",
-                "비밀호스트", "https://cdn.example.com/users/u77.png"
+                "비밀호스트", "https://cdn.example.com/users/u77.png",
+                3
         );
         when(roomService.getPrivateDetail(2L)).thenReturn(resp);
 
@@ -91,7 +94,8 @@ class RoomControllerTest {
                 .andExpect(jsonPath("$.data.host_id").value(77))
                 .andExpect(jsonPath("$.data.invite_code").value("SECR3T"))
                 .andExpect(jsonPath("$.data.host_nickname").value("비밀호스트"))
-                .andExpect(jsonPath("$.data.host_profile_image_url").value("https://cdn.example.com/users/u77.png"));
+                .andExpect(jsonPath("$.data.host_profile_image_url").value("https://cdn.example.com/users/u77.png"))
+                .andExpect(jsonPath("$.data.member_count").value(3));
     }
 
     @Test
@@ -105,9 +109,9 @@ class RoomControllerTest {
     // ---------- 공개방 목록 ----------
     @Test
     void listPublic_returns200WithArray() throws Exception {
-        var r1 = new RoomResponse(3L,"공개3","d",false,"t",10L,"C3","닉","u");
-        var r2 = new RoomResponse(2L,"공개2","d",false,"t",10L,"C2","닉","u");
-        var r3 = new RoomResponse(1L,"공개1","d",false,"t",10L,"C1","닉","u");
+        var r1 = new RoomResponse(3L,"공개3","d",false,"t",10L,"C3","닉","u", 7);
+        var r2 = new RoomResponse(2L,"공개2","d",false,"t",10L,"C2","닉","u", 6);
+        var r3 = new RoomResponse(1L,"공개1","d",false,"t",10L,"C1","닉","u", 5);
         when(roomService.listPublic()).thenReturn(List.of(r1, r2, r3));
 
         mvc.perform(get("/api/v1/rooms/public").with(auth()))
@@ -119,7 +123,10 @@ class RoomControllerTest {
                 .andExpect(jsonPath("$.data[2].is_private").value(false))
                 .andExpect(jsonPath("$.data[0].id").value(3))
                 .andExpect(jsonPath("$.data[1].id").value(2))
-                .andExpect(jsonPath("$.data[2].id").value(1));
+                .andExpect(jsonPath("$.data[2].id").value(1))
+                .andExpect(jsonPath("$.data[0].member_count").value(7))
+                .andExpect(jsonPath("$.data[1].member_count").value(6))
+                .andExpect(jsonPath("$.data[2].member_count").value(5));
     }
 
     @Test
@@ -136,8 +143,8 @@ class RoomControllerTest {
     // ---------- 비공개방 목록 ----------
     @Test
     void listPrivate_returns200WithArray() throws Exception {
-        var r1 = new RoomResponse(5L,"비공개5","d",true,"t",10L,"X5","닉","u");
-        var r2 = new RoomResponse(4L,"비공개4","d",true,"t",10L,"X4","닉","u");
+        var r1 = new RoomResponse(5L,"비공개5","d",true,"t",10L,"X5","닉","u", 4);
+        var r2 = new RoomResponse(4L,"비공개4","d",true,"t",10L,"X4","닉","u", 2);
         when(roomService.listPrivate()).thenReturn(List.of(r1, r2));
 
         mvc.perform(get("/api/v1/rooms/private").with(auth()))
@@ -147,7 +154,9 @@ class RoomControllerTest {
                 .andExpect(jsonPath("$.data[0].is_private").value(true))
                 .andExpect(jsonPath("$.data[1].is_private").value(true))
                 .andExpect(jsonPath("$.data[0].id").value(5))
-                .andExpect(jsonPath("$.data[1].id").value(4));
+                .andExpect(jsonPath("$.data[1].id").value(4))
+                .andExpect(jsonPath("$.data[0].member_count").value(4))
+                .andExpect(jsonPath("$.data[1].member_count").value(2));
     }
 
     // ---------- 생성 ----------
@@ -155,7 +164,10 @@ class RoomControllerTest {
     void createRoom_returns200WithBody() throws Exception {
         var req  = new RoomCreateRequest("스터디룸","조용한 곳", true, "https://cdn.example.com/img.png");
         var resp = new RoomResponse(1L, "스터디룸", "조용한 곳", true,
-                "https://cdn.example.com/img.png", 42L, "ABCD1234", "홍길동", "https://cdn.example.com/users/u42.png");
+                "https://cdn.example.com/img.png", 42L, "ABCD1234",
+                "홍길동", "https://cdn.example.com/users/u42.png",
+                1  // 새 방: 호스트만
+        );
         when(roomService.create(any(), eq(42L))).thenReturn(resp);
 
         mvc.perform(post("/api/v1/rooms")
@@ -169,7 +181,8 @@ class RoomControllerTest {
                 .andExpect(jsonPath("$.data.name").value("스터디룸"))
                 .andExpect(jsonPath("$.data.invite_code").isNotEmpty())
                 .andExpect(jsonPath("$.data.host_nickname").value("홍길동"))
-                .andExpect(jsonPath("$.data.host_profile_image_url").value("https://cdn.example.com/users/u42.png"));
+                .andExpect(jsonPath("$.data.host_profile_image_url").value("https://cdn.example.com/users/u42.png"))
+                .andExpect(jsonPath("$.data.member_count").value(1));
     }
 
     @Test
@@ -190,7 +203,10 @@ class RoomControllerTest {
     void update_success_returns200WithBody() throws Exception {
         var req = new RoomUpdateRequest("새이름", "새설명", false, "https://cdn.new/img.png");
         var resp = new RoomResponse(1L, "새이름", "새설명", false,
-                "https://cdn.new/img.png", 42L, "ABC1234", "홍길동", "https://cdn.example.com/users/u42.png");
+                "https://cdn.new/img.png", 42L, "ABC1234",
+                "홍길동", "https://cdn.example.com/users/u42.png",
+                3 // 예: 방 인원 3명
+        );
 
         when(roomService.update(eq(1L), eq(42L), any(RoomUpdateRequest.class))).thenReturn(resp);
 
@@ -207,7 +223,8 @@ class RoomControllerTest {
                 .andExpect(jsonPath("$.data.is_private").value(false))
                 .andExpect(jsonPath("$.data.thumbnail").value("https://cdn.new/img.png"))
                 .andExpect(jsonPath("$.data.host_nickname").value("홍길동"))
-                .andExpect(jsonPath("$.data.host_profile_image_url").value("https://cdn.example.com/users/u42.png"));
+                .andExpect(jsonPath("$.data.host_profile_image_url").value("https://cdn.example.com/users/u42.png"))
+                .andExpect(jsonPath("$.data.member_count").value(3));
     }
 
     @Test
