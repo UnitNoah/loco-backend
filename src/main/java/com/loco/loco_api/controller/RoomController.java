@@ -11,8 +11,6 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,14 +23,24 @@ import java.util.List;
 public class RoomController {
     private final RoomService service;
 
-    @GetMapping("/{roomId}")
-    @Operation(summary = "방 상세 조회", description = "단건 방 상세를 조회합니다.")
+    @GetMapping("/public/{roomId}")
+    @Operation(summary = "공개방 상세 조회", description = "단건 공개방 상세를 조회합니다.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "성공")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "방 없음")
-    public ApiResponse<RoomResponse> getRoom(
+    public ApiResponse<RoomResponse> getPublicRoom(
             @Parameter(description = "방 ID", example = "1") @PathVariable Long roomId
     ) {
-        return ApiResponse.success(service.getDetail(roomId));
+        return ApiResponse.success(service.getPublicDetail(roomId));
+    }
+
+    @GetMapping("/private/{roomId}")
+    @Operation(summary = "비공개방 상세 조회", description = "단건 비공개방 상세를 조회합니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "성공")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "방 없음")
+    public ApiResponse<RoomResponse> getPrivateRoom(
+            @Parameter(description = "방 ID", example = "1") @PathVariable Long roomId
+    ) {
+        return ApiResponse.success(service.getPrivateDetail(roomId));
     }
 
     @GetMapping("/public")
@@ -71,12 +79,12 @@ public class RoomController {
 
     @DeleteMapping("/{roomId}")
     @Operation(summary = "방 삭제", description = "해당 방을 삭제합니다.")
-    public ResponseEntity<Void> deleteRoom(
+    public ApiResponse<Long> deleteRoom(
             @Parameter(description = "방 ID", example = "1") @PathVariable Long roomId,
             @Parameter(description = "요청자 ID", example = "42") @RequestParam Long requesterId
     ) {
         service.delete(roomId, requesterId);
-        return ResponseEntity.noContent().build();
+        return ApiResponse.success(service.delete(roomId, requesterId));
     }
 
     @GetMapping("/hosted")
@@ -93,22 +101,22 @@ public class RoomController {
 
     @PostMapping("/{roomId}/join")
     @Operation(summary = "방 참여", description = "비공개방은 초대코드 필요.")
-    public ApiResponse<Void> join(
+    public ApiResponse<RoomResponse> join(
             @PathVariable Long roomId,
             @RequestParam Long userId,
             @RequestParam(required = false) String inviteCode
     ) {
         service.join(roomId, userId, inviteCode);
-        return ApiResponse.success(null);
+        return ApiResponse.success(service.join(roomId, userId, inviteCode));
     }
 
     @PostMapping("/{roomId}/leave")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "방 나가기", description = "호스트는 나갈 수 없음")
-    public void leave(
+    public ApiResponse<RoomResponse> leave(
             @PathVariable Long roomId,
             @RequestParam Long userId
     ) {
         service.leave(roomId, userId);
+        return ApiResponse.success(service.leave(roomId, userId));
     }
 }

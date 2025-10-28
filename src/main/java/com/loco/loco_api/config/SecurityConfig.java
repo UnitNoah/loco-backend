@@ -149,7 +149,8 @@ public class SecurityConfig {
                             "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
                             "/error",
                             "/api/v1/users/logout",   // 로그아웃 허용
-                            "/api/v1/users/profile"
+                            "/api/v1/users/profile",
+                            "/api/v1/rooms/public/**"
                     ).permitAll()
                     .anyRequest().authenticated()
             )

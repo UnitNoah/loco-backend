@@ -7,6 +7,7 @@ import com.loco.loco_api.common.exception.CustomException;
 import com.loco.loco_api.common.exception.ErrorCode;
 import com.loco.loco_api.domain.room.Room;
 import com.loco.loco_api.domain.user.UserEntity;
+import com.loco.loco_api.repository.RoomParticipantRepository;
 import com.loco.loco_api.repository.RoomRepository;
 import com.loco.loco_api.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -27,13 +28,15 @@ import static org.mockito.Mockito.*;
 class RoomServiceTest {
 
     @Mock private RoomRepository rooms;
-    @Mock private UserRepository users; // NEW
+    @Mock private UserRepository users;
+    @Mock private RoomParticipantRepository participants; // <-- needed by RoomService ctor
 
     @InjectMocks private RoomService roomService;
 
-    // 방 상세 조회
+    // --- 상세 조회 (분리된 엔드포인트 대응) ---
+
     @Test
-    void getDetail_success() {
+    void getPublicDetail_success_whenRoomIsPublic() {
         var host = UserEntity.builder()
                 .id(42L).nickname("홍길동").provider("google").oauthId("x")
                 .build();
@@ -42,35 +45,96 @@ class RoomServiceTest {
                 .id(1L)
                 .name("스터디룸")
                 .description("조용한 곳")
-                .isPrivate(true)
+                .isPrivate(false)
                 .thumbnail("https://cdn.example.com/img.png")
                 .inviteCode("ABCD1234")
                 .host(host)
                 .build();
 
-        when(rooms.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(room));
+        when(rooms.findActiveByIdFetchHost(1L)).thenReturn(Optional.of(room));
 
-        RoomResponse resp = roomService.getDetail(1L);
+        RoomResponse resp = roomService.getPublicDetail(1L);
 
         assertThat(resp.id()).isEqualTo(1L);
         assertThat(resp.name()).isEqualTo("스터디룸");
         assertThat(resp.description()).isEqualTo("조용한 곳");
-        assertThat(resp.isPrivate()).isTrue();
+        assertThat(resp.isPrivate()).isFalse();
         assertThat(resp.thumbnail()).isEqualTo("https://cdn.example.com/img.png");
         assertThat(resp.hostId()).isEqualTo(42L);
         assertThat(resp.inviteCode()).isEqualTo("ABCD1234");
     }
 
     @Test
-    void getDetail_notFound() {
-        when(rooms.findByIdAndDeletedAtIsNull(999L)).thenReturn(Optional.empty());
+    void getPublicDetail_404_whenRoomIsPrivate() {
+        var host = UserEntity.builder().id(1L).nickname("h").provider("g").oauthId("x").build();
+        var room = Room.builder().id(10L).name("비공개").description("d").isPrivate(true).inviteCode("X").host(host).build();
+        when(rooms.findActiveByIdFetchHost(10L)).thenReturn(Optional.of(room));
 
-        assertThatThrownBy(() -> roomService.getDetail(999L))
+        assertThatThrownBy(() -> roomService.getPublicDetail(10L))
                 .isInstanceOf(CustomException.class)
-                .hasMessageContaining("해당 방을 찾을 수 없습니다.");
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.ROOM_NOT_FOUND);
     }
 
-    // 공개방 목록 조회 (unchanged)
+    @Test
+    void getPrivateDetail_success_whenRoomIsPrivate() {
+        var host = UserEntity.builder()
+                .id(42L).nickname("홍길동").provider("google").oauthId("x")
+                .build();
+
+        var room = Room.builder()
+                .id(2L)
+                .name("비공개 스터디룸")
+                .description("d")
+                .isPrivate(true)
+                .thumbnail("t.png")
+                .inviteCode("INV123")
+                .host(host)
+                .build();
+
+        when(rooms.findActiveByIdFetchHost(2L)).thenReturn(Optional.of(room));
+
+        RoomResponse resp = roomService.getPrivateDetail(2L);
+
+        assertThat(resp.id()).isEqualTo(2L);
+        assertThat(resp.isPrivate()).isTrue();
+        assertThat(resp.hostId()).isEqualTo(42L);
+    }
+
+    @Test
+    void getPrivateDetail_404_whenRoomIsPublic() {
+        var host = UserEntity.builder().id(1L).nickname("h").provider("g").oauthId("x").build();
+        var room = Room.builder().id(20L).name("공개").description("d").isPrivate(false).inviteCode("C").host(host).build();
+        when(rooms.findActiveByIdFetchHost(20L)).thenReturn(Optional.of(room));
+
+        assertThatThrownBy(() -> roomService.getPrivateDetail(20L))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.ROOM_NOT_FOUND);
+    }
+
+    @Test
+    void getPublicDetail_notFound() {
+        when(rooms.findActiveByIdFetchHost(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> roomService.getPublicDetail(999L))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.ROOM_NOT_FOUND);
+    }
+
+    @Test
+    void getPrivateDetail_notFound() {
+        when(rooms.findActiveByIdFetchHost(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> roomService.getPrivateDetail(999L))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.ROOM_NOT_FOUND);
+    }
+
+    // --- 공개/비공개 목록 ---
+
     @Test
     void listPublic_filtersAndMaps_inCreatedAtDescOrder() {
         var host = UserEntity.builder().id(42L).nickname("홍길동").provider("google").oauthId("x").build();
@@ -79,7 +143,7 @@ class RoomServiceTest {
         var r2 = Room.builder().id(2L).name("공개2").description("d").isPrivate(false).inviteCode("C2").thumbnail("t").host(host).build();
         var r1 = Room.builder().id(1L).name("공개1").description("d").isPrivate(false).inviteCode("C1").thumbnail("t").host(host).build();
 
-        when(rooms.findByIsPrivateFalseOrderByCreatedAtDesc()).thenReturn(List.of(r3, r2, r1));
+        when(rooms.findPublicOrderByCreatedAtDesc()).thenReturn(List.of(r3, r2, r1));
 
         List<RoomResponse> list = roomService.listPublic();
 
@@ -87,11 +151,10 @@ class RoomServiceTest {
         assertThat(list).extracting(RoomResponse::id).containsExactly(3L, 2L, 1L);
         assertThat(list).allMatch(rr -> !rr.isPrivate());
 
-        verify(rooms, times(1)).findByIsPrivateFalseOrderByCreatedAtDesc();
+        verify(rooms, times(1)).findPublicOrderByCreatedAtDesc();
         verifyNoMoreInteractions(rooms);
     }
 
-    // 비공개방 목록 조회 (unchanged)
     @Test
     void listPrivate_filtersAndMaps_inCreatedAtDescOrder() {
         var host = UserEntity.builder().id(7L).nickname("이몽룡").provider("google").oauthId("y").build();
@@ -99,7 +162,7 @@ class RoomServiceTest {
         var r5 = Room.builder().id(5L).name("비공개5").description("d").isPrivate(true).inviteCode("X5").thumbnail("t").host(host).build();
         var r4 = Room.builder().id(4L).name("비공개4").description("d").isPrivate(true).inviteCode("X4").thumbnail("t").host(host).build();
 
-        when(rooms.findByIsPrivateTrueOrderByCreatedAtDesc()).thenReturn(List.of(r5, r4));
+        when(rooms.findPrivateOrderByCreatedAtDesc()).thenReturn(List.of(r5, r4));
 
         List<RoomResponse> list = roomService.listPrivate();
 
@@ -107,21 +170,22 @@ class RoomServiceTest {
         assertThat(list).extracting(RoomResponse::id).containsExactly(5L, 4L);
         assertThat(list).allMatch(RoomResponse::isPrivate);
 
-        verify(rooms, times(1)).findByIsPrivateTrueOrderByCreatedAtDesc();
+        verify(rooms, times(1)).findPrivateOrderByCreatedAtDesc();
         verifyNoMoreInteractions(rooms);
     }
 
     @Test
     void listPublic_empty_returnsEmptyList() {
-        when(rooms.findByIsPrivateFalseOrderByCreatedAtDesc()).thenReturn(List.of());
+        when(rooms.findPublicOrderByCreatedAtDesc()).thenReturn(List.of());
 
         List<RoomResponse> list = roomService.listPublic();
 
         assertThat(list).isEmpty();
-        verify(rooms).findByIsPrivateFalseOrderByCreatedAtDesc();
+        verify(rooms).findPublicOrderByCreatedAtDesc();
     }
 
-    // 방 생성
+    // --- 생성/수정/삭제 ---
+
     @Test
     void create_success() {
         UserEntity host = UserEntity.builder()
@@ -147,7 +211,6 @@ class RoomServiceTest {
                 .hasMessageContaining("Host user not found");
     }
 
-    // 방 수정
     private Room roomWithHost(long roomId, long hostId) {
         var host = UserEntity.builder().id(hostId).nickname("host").provider("google").oauthId("x").build();
 
@@ -165,8 +228,8 @@ class RoomServiceTest {
     @Test
     void update_success_hostOnly() {
         var room = roomWithHost(1L, 42L);
-        when(rooms.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(room));
-        when(rooms.save(any())).thenAnswer(inv -> inv.getArgument(0)); // ensure save doesn't NPE
+        when(rooms.findActiveByIdFetchHost(1L)).thenReturn(Optional.of(room));
+        when(rooms.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var req = new RoomUpdateRequest("new", "new desc", false, "new.png");
         RoomResponse resp = roomService.update(1L, 42L, req);
@@ -180,7 +243,7 @@ class RoomServiceTest {
     @Test
     void update_forbidden_whenNotHost() {
         var room = roomWithHost(1L, 42L);
-        when(rooms.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(room));
+        when(rooms.findActiveByIdFetchHost(1L)).thenReturn(Optional.of(room));
 
         var req = new RoomUpdateRequest("new", null, null, null);
 
@@ -194,7 +257,7 @@ class RoomServiceTest {
 
     @Test
     void update_notFound() {
-        when(rooms.findByIdAndDeletedAtIsNull(999L)).thenReturn(Optional.empty());
+        when(rooms.findActiveByIdFetchHost(999L)).thenReturn(Optional.empty());
         var req = new RoomUpdateRequest("x", null, null, null);
 
         assertThatThrownBy(() -> roomService.update(999L, 42L, req))
@@ -203,22 +266,20 @@ class RoomServiceTest {
                 .isEqualTo(ErrorCode.ROOM_NOT_FOUND);
     }
 
-    // 방 삭제
     @Test
     void delete_success_hostOnly() {
         var room = roomWithHost(1L, 42L);
-        when(rooms.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(room));
+        when(rooms.findActiveByIdFetchHost(1L)).thenReturn(Optional.of(room));
 
         roomService.delete(1L, 42L);
 
-        verify(rooms, never()).delete(any());
-        assertThat(room.getDeletedAt()).isNotNull();
+        verify(rooms).delete(room);
     }
 
     @Test
     void delete_forbidden_whenNotHost() {
         var room = roomWithHost(1L, 42L);
-        when(rooms.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(room));
+        when(rooms.findActiveByIdFetchHost(1L)).thenReturn(Optional.of(room));
 
         assertThatThrownBy(() -> roomService.delete(1L, 77L))
                 .isInstanceOf(CustomException.class)
@@ -230,7 +291,7 @@ class RoomServiceTest {
 
     @Test
     void delete_notFound() {
-        when(rooms.findByIdAndDeletedAtIsNull(999L)).thenReturn(Optional.empty());
+        when(rooms.findActiveByIdFetchHost(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> roomService.delete(999L, 42L))
                 .isInstanceOf(CustomException.class)
