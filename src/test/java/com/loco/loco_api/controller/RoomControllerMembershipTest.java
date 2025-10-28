@@ -42,11 +42,11 @@ public class RoomControllerMembershipTest {
 
     @Test
     void hostedRooms_ok() throws Exception {
-        var room1 = new RoomResponse(10L, "A", "d", false, null, 1L, "X", "hostA", "https://cdn/u1.png");
-        var room2 = new RoomResponse(11L, "B", "d", true,  null, 1L, "Y", "hostA", "https://cdn/u1.png");
+        var room1 = new RoomResponse(10L, "A", "d", false, null, 1L, "X", "hostA", "https://cdn/u1.png", 2);
+        var room2 = new RoomResponse(11L, "B", "d", true,  null, 1L, "Y", "hostA", "https://cdn/u1.png", 5);
         when(roomService.listHosted(1L)).thenReturn(List.of(room2, room1));
 
-        mvc.perform(get("/api/v1/rooms/hosted").with(user("tester").roles("USER")).param("userId", "1"))
+        mvc.perform(get("/api/v1/rooms/hosted").with(auth()).param("userId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data[0].id").value(11))
@@ -55,11 +55,11 @@ public class RoomControllerMembershipTest {
 
     @Test
     void joinedRooms_ok() throws Exception {
-        var room1 = new RoomResponse(20L, "J1", "d", false, null, 99L, "X", "h1", "https://cdn/u99.png");
-        var room2 = new RoomResponse(30L, "32", "d", true,  null, 77L, "Y", "h2", "https://cdn/u77.png");
+        var room1 = new RoomResponse(20L, "J1", "d", false, null, 99L, "X", "h1", "https://cdn/u99.png", 3);
+        var room2 = new RoomResponse(30L, "32", "d", true,  null, 77L, "Y", "h2", "https://cdn/u77.png", 4);
         when(roomService.listJoined(1L)).thenReturn(List.of(room2, room1));
 
-        mvc.perform(get("/api/v1/rooms/joined").with(user("tester").roles("USER")).param("userId", "1"))
+        mvc.perform(get("/api/v1/rooms/joined").with(auth()).param("userId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data[0].id").value(30))
