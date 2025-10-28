@@ -23,14 +23,24 @@ import java.util.List;
 public class RoomController {
     private final RoomService service;
 
-    @GetMapping("/{roomId}")
-    @Operation(summary = "방 상세 조회", description = "단건 방 상세를 조회합니다.")
+    @GetMapping("/public/{roomId}")
+    @Operation(summary = "공개방 상세 조회", description = "단건 공개방 상세를 조회합니다.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "성공")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "방 없음")
-    public ApiResponse<RoomResponse> getRoom(
+    public ApiResponse<RoomResponse> getPublicRoom(
             @Parameter(description = "방 ID", example = "1") @PathVariable Long roomId
     ) {
-        return ApiResponse.success(service.getDetail(roomId));
+        return ApiResponse.success(service.getPublicDetail(roomId));
+    }
+
+    @GetMapping("/private/{roomId}")
+    @Operation(summary = "비공개방 상세 조회", description = "단건 비공개방 상세를 조회합니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "성공")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "방 없음")
+    public ApiResponse<RoomResponse> getPrivateRoom(
+            @Parameter(description = "방 ID", example = "1") @PathVariable Long roomId
+    ) {
+        return ApiResponse.success(service.getPrivateDetail(roomId));
     }
 
     @GetMapping("/public")

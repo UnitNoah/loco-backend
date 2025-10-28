@@ -22,8 +22,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class RoomServiceMembershipTest {
@@ -35,7 +34,13 @@ class RoomServiceMembershipTest {
     @InjectMocks RoomService service;
 
     private UserEntity user(long id) {
-        return UserEntity.builder().id(id).provider("google").oauthId("x" + id).build();
+        return UserEntity.builder()
+                .id(id)
+                .nickname("user" + id)                 // ensure host fields exist for RoomResponse.from(...)
+                .profileImageUrl("https://img/" + id)  // optional, safe default
+                .provider("google")
+                .oauthId("x" + id)
+                .build();
     }
 
     private Room room(long id, long hostId, boolean priv) {
@@ -60,12 +65,12 @@ class RoomServiceMembershipTest {
         room1.setCreatedAt(LocalDateTime.now().minusDays(1));
         room2.setCreatedAt(LocalDateTime.now());
 
-        // Service uses: rooms.findHostBy(userId)
         when(rooms.findHostBy(me)).thenReturn(List.of(room2, room1));
 
         List<RoomResponse> out = service.listHosted(me);
 
         assertThat(out).extracting(RoomResponse::id).containsExactly(20L, 10L);
+        verify(rooms).findHostBy(me);
     }
 
     @Test
@@ -79,12 +84,12 @@ class RoomServiceMembershipTest {
         joinedNew.setCreatedAt(LocalDateTime.now());
         joinedOld.setCreatedAt(LocalDateTime.now().minusDays(2));
 
-        // Service uses: participants.findJoinedRoomsBy(userId) -> List<Room>
         when(participants.findJoinedRoomsBy(me)).thenReturn(List.of(joinedNew, joinedOld));
 
         List<RoomResponse> out = service.listJoined(me);
 
         assertThat(out).extracting(RoomResponse::id).containsExactly(200L, 100L);
+        verify(participants).findJoinedRoomsBy(me);
     }
 
     @Test
@@ -92,10 +97,8 @@ class RoomServiceMembershipTest {
         long me = 1L;
         Room r = room(100L, 2L, false);
 
-        // Service uses: rooms.findActiveByIdFetchHost(roomId)
         when(rooms.findActiveByIdFetchHost(100L)).thenReturn(Optional.of(r));
         when(users.findById(me)).thenReturn(Optional.of(user(me)));
-        // Service uses: participants.existsMembership(roomId, userId)
         when(participants.existsMembership(100L, me)).thenReturn(false);
 
         service.join(100L, me, null);
@@ -120,11 +123,39 @@ class RoomServiceMembershipTest {
     }
 
     @Test
+    void join_asHost_returnsRoomResponse_withoutSavingMembership() {
+        long me = 1L;
+        Room r = room(100L, me, false);
+
+        when(rooms.findActiveByIdFetchHost(100L)).thenReturn(Optional.of(r));
+        when(users.findById(me)).thenReturn(Optional.of(user(me)));
+
+        RoomResponse resp = service.join(100L, me, null);
+
+        assertThat(resp.id()).isEqualTo(100L);
+        verify(participants, never()).save(any());
+    }
+
+    @Test
+    void join_alreadyJoined_conflict() {
+        long me = 1L;
+        Room r = room(100L, 2L, false);
+
+        when(rooms.findActiveByIdFetchHost(100L)).thenReturn(Optional.of(r));
+        when(users.findById(me)).thenReturn(Optional.of(user(me)));
+        when(participants.existsMembership(100L, me)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.join(100L, me, null))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.ROOM_ALREADY_JOINED);
+    }
+
+    @Test
     void leave_host_forbidden() {
         long me = 1L;
         Room r = room(100L, me, false);
 
-        // Service uses: rooms.findActiveByIdFetchHost(roomId)
         when(rooms.findActiveByIdFetchHost(100L)).thenReturn(Optional.of(r));
         when(users.findById(me)).thenReturn(Optional.of(user(me)));
 
@@ -143,7 +174,6 @@ class RoomServiceMembershipTest {
         when(users.findById(me)).thenReturn(Optional.of(user(me)));
 
         RoomParticipant rp = RoomParticipant.builder().room(r).userEntity(user(me)).build();
-        // Service uses: participants.findMembership(roomId, userId)
         when(participants.findMembership(100L, me)).thenReturn(Optional.of(rp));
 
         service.leave(100L, me);

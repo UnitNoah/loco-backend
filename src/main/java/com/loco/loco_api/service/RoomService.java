@@ -30,9 +30,19 @@ public class RoomService {
     private final SecureRandom random = new SecureRandom();
     private static final String ALPHANUM = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no confusing chars
 
-    // 방 상세 조회
-    public RoomResponse getDetail(Long roomId) {
-        Room room = rooms.findActiveByIdFetchHost(roomId).orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+    // 공개 방 상세 조회
+    public RoomResponse getPublicDetail(Long roomId) {
+        Room room = rooms.findActiveByIdFetchHost(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+        if (room.isPrivate()) throw new CustomException(ErrorCode.ROOM_NOT_FOUND);
+        return RoomResponse.from(room);
+    }
+
+    // 비공개방 상세 조회
+    public RoomResponse getPrivateDetail(Long roomId) {
+        Room room = rooms.findActiveByIdFetchHost(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+        if (!room.isPrivate()) throw new CustomException(ErrorCode.ROOM_NOT_FOUND);
         return RoomResponse.from(room);
     }
 
