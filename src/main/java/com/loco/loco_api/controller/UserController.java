@@ -78,15 +78,18 @@ public class UserController {
 
   @PostMapping("/logout")
   public ApiResponse<String> logout(HttpServletResponse response, HttpServletRequest request) {
-    boolean secure = request.isSecure() || "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto"));
+    boolean secure = request.isSecure() ||
+            "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto"));
+
     // access_token 쿠키 삭제
     ResponseCookie cookie = ResponseCookie.from("access_token", "")
             .path("/")
-            .maxAge(0)
+            .maxAge(0)                       // expire immediately
             .httpOnly(true)
-            .secure(secure)             // HTTPS일 경우 필수
-            .sameSite(secure ? "None" : "Lax") // 로컬(http)은 Lax, 운영(https)은 None
+            .secure(secure)
+            .sameSite(secure ? "None" : "Lax")
             .build();
+
     response.addHeader("Set-Cookie", cookie.toString());
     return ApiResponse.success("로그아웃이 완료되었습니다.");
   }

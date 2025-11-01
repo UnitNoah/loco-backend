@@ -202,7 +202,7 @@ public class SecurityConfig {
                       );
 
                       boolean secure = isSecure(req);
-                      setCookie(res, "access_token", access, 900, true, secure, "/", secure ? "None" : "Lax");
+                      setCookie(res, "access_token", access, 90000, true, secure, "/", secure ? "None" : "Lax");
 
                       res.sendRedirect("http://localhost:3000");
                     })
