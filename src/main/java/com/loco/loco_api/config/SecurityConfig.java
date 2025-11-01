@@ -73,7 +73,6 @@ public class SecurityConfig {
   }
 
 
-
   /**
    * Bearer 토큰 추출 전략을 정의한다.
    * 1순위: Authorization 헤더, 2순위: HttpOnly 쿠키(access_token)에서 토큰을 읽는다.
@@ -127,7 +126,7 @@ public class SecurityConfig {
                               new AntPathRequestMatcher("/oauth2/authorization/**", HttpMethod.GET.name()),
                               new AntPathRequestMatcher("/login/oauth2/code/**", HttpMethod.GET.name()),
                               new AntPathRequestMatcher("/actuator/health", HttpMethod.GET.name()),
-                              new AntPathRequestMatcher("/actuator/info",   HttpMethod.GET.name())
+                              new AntPathRequestMatcher("/actuator/info", HttpMethod.GET.name())
                       );
             })
             .formLogin(AbstractHttpConfigurer::disable)
@@ -171,21 +170,19 @@ public class SecurityConfig {
 
                       if (principal instanceof CustomOAuth2User cu) {
                         // 네이버/카카오
-                        provider     = cu.getProvider();
-                        oauthId      = cu.getOauthId();
-                        email        = cu.getEmail();
-                        displayName  = cu.getName();
+                        provider = cu.getProvider();
+                        oauthId = cu.getOauthId();
+                        email = cu.getEmail();
+                        displayName = cu.getName();
                         profileImage = cu.getUser().getProfileImage();
-                      }
-                      else if (principal instanceof org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser gu) {
+                      } else if (principal instanceof org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser gu) {
                         // 구글
-                        provider     = "google";
-                        oauthId      = gu.getSubject();
-                        email        = (String) gu.getAttributes().get("email");
-                        displayName  = (String) gu.getAttributes().getOrDefault("name", email);
+                        provider = "google";
+                        oauthId = gu.getSubject();
+                        email = (String) gu.getAttributes().get("email");
+                        displayName = (String) gu.getAttributes().getOrDefault("name", email);
                         profileImage = (String) gu.getAttributes().get("picture");
-                      }
-                      else {
+                      } else {
                         throw new IllegalStateException("Unexpected principal type: " + principal.getClass());
                       }
 
@@ -212,8 +209,20 @@ public class SecurityConfig {
 
             // 리소스 서버: JWT 검증. + roles 클레임 매핑을 위한 converter 설정
             .oauth2ResourceServer(oauth2 -> oauth2
-                    .bearerTokenResolver(bearerTokenResolver())             // ★ 추가
+                    .bearerTokenResolver(bearerTokenResolver())
                     .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
+                    .authenticationEntryPoint((req, res, ex) -> {
+                      // 만료된 토큰이어도 게스트 응답 반환
+                      if (req.getRequestURI().contains("/api/v1/users/profile")) {
+                        res.setStatus(HttpServletResponse.SC_OK);
+                        res.setContentType("application/json;charset=UTF-8");
+                        res.getWriter().write("""
+                                    {"success":true,"data":{"status":"guest","message":"로그인되지 않은 사용자입니다."}}
+                                """);
+                      } else {
+                        res.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+                      }
+                    })
             );
 
     return http.build();
@@ -291,22 +300,22 @@ public class SecurityConfig {
   /**
    * HttpOnly 쿠키를 수동으로 셋팅.
    *
-   * @param res       응답 객체
-   * @param name      쿠키 이름 (예: "access_token")
-   * @param value     쿠키 값 (예: JWT)
-   * @param maxAge    만료 시간(초). 0이면 즉시 삭제, 음수면 세션 쿠키
-   * @param httpOnly  true면 JS에서 접근 불가(document.cookie 차단) → XSS 완화
-   * @param secure    true면 HTTPS에서만 전송 → 크로스도메인에서 SameSite=None이면 필수
-   * @param path      쿠키 유효 경로 (보통 "/")
-   * @param sameSite  SameSite 정책: "Lax" | "Strict" | "None"
-   *                  - Lax: 기본 권장(대부분의 내비게이션 요청 허용)
-   *                  - None: 크로스사이트 전송 허용(반드시 Secure=true 필요, HTTPS 필수)
-   *                  - Strict: 완전 엄격(대부분의 크로스사이트 전송 차단)
-   *
-   * 브라우저 특성:
-   * - 크로스도메인에서 인증 쿠키를 쓰려면 SameSite=None; Secure 조합이 필요(HTTPS 필수).
-   * - 동일 도메인/서브도메인만 쓸 거면 기본 Lax로 충분한 경우가 많음. *
-   * */
+   * @param res      응답 객체
+   * @param name     쿠키 이름 (예: "access_token")
+   * @param value    쿠키 값 (예: JWT)
+   * @param maxAge   만료 시간(초). 0이면 즉시 삭제, 음수면 세션 쿠키
+   * @param httpOnly true면 JS에서 접근 불가(document.cookie 차단) → XSS 완화
+   * @param secure   true면 HTTPS에서만 전송 → 크로스도메인에서 SameSite=None이면 필수
+   * @param path     쿠키 유효 경로 (보통 "/")
+   * @param sameSite SameSite 정책: "Lax" | "Strict" | "None"
+   *                 - Lax: 기본 권장(대부분의 내비게이션 요청 허용)
+   *                 - None: 크로스사이트 전송 허용(반드시 Secure=true 필요, HTTPS 필수)
+   *                 - Strict: 완전 엄격(대부분의 크로스사이트 전송 차단)
+   *                 <p>
+   *                 브라우저 특성:
+   *                 - 크로스도메인에서 인증 쿠키를 쓰려면 SameSite=None; Secure 조합이 필요(HTTPS 필수).
+   *                 - 동일 도메인/서브도메인만 쓸 거면 기본 Lax로 충분한 경우가 많음. *
+   */
   private static void setCookie(HttpServletResponse res, String name, String value,
                                 int maxAge, boolean httpOnly, boolean secure, String path, String sameSite) {
     StringBuilder sb = new StringBuilder();
@@ -328,8 +337,8 @@ public class SecurityConfig {
 
         String provider = "google";
         String oauthId = oidcUser.getSubject();
-        String email   = (String) oidcUser.getAttributes().get("email");
-        String name    = (String) oidcUser.getAttributes().get("name");
+        String email = (String) oidcUser.getAttributes().get("email");
+        String name = (String) oidcUser.getAttributes().get("name");
         String picture = (String) oidcUser.getAttributes().get("picture");
 
         userRepository.findByProviderAndOauthId(provider, oauthId)
